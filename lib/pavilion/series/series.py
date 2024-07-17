@@ -47,7 +47,7 @@ class TestSeries:
     DEPENDENCY_FN = 'dependency'
     OUT_FN = 'series.out'
     PGID_FN = 'series.pgid'
-    CANCEL_FN = Path('series.CANCELED')
+    CANCEL_FN = 'series.CANCELED'
     NAME_RE = re.compile('[a-z][a-z0-9_-]+$')
 
     def __init__(self, pav_cfg: config.PavConfig, series_cfg, _id=None,
@@ -361,12 +361,13 @@ differentiate it from test ids."""
 
         self.test_sets = {}
 
-    def cancel(self, message=None, cancel_tests=True):
+    def cancel(self, message: str = None, cancel_tests: bool = True, cancel_group: bool = False) -> None:
         """Goes through all test objects assigned to series and cancels tests
         that haven't been completed.
 
         :param message: Reason to give for cancellation.
         :param cancel_tests: Whether to cancel the attached tests. (Default True)
+        :param cancel_group: Whether to cancel other tests in the same group
         """
 
         if self.pgid and self.pgid != os.getpid():
@@ -380,6 +381,9 @@ differentiate it from test ids."""
                 test.cancel(message or "Cancelled via series. Reason not given.")
 
             cancel_utils.cancel_jobs(self.pav_cfg, List[self.tests.values()])
+
+        # Drop cancellation file to signal cancellation to other processes
+        (self.path / self.CANCEL_FN).touch()
 
         self.status.set(SERIES_STATES.CANCELED, "Series cancelled: {}".format(message))
 
@@ -485,6 +489,9 @@ differentiate it from test ids."""
             # Add all the tests we created to this test set.
             self._add_tests(test_batch, test_set.iter_name)
 
+            # Cancel tests if a cancel file has been dropped
+            self.check_cancelled()
+
             # Build each test
             try:
                 test_set.build(deprecated_builds, failed_builds)
@@ -499,6 +506,8 @@ differentiate it from test ids."""
 
             if not test_set.ready_to_start:
                 continue
+
+            self.check_cancelled()
 
             try:
                 started_tests, new_jobs = test_set.kickoff()
@@ -525,6 +534,7 @@ differentiate it from test ids."""
             _simultaneous = test_set.simultaneous if test_set.simultaneous else self.simultaneous
             # Wait for jobs until enough have finished to start a new batch.
             while tests_running + self.batch_size > _simultaneous:
+                self.check_cancelled()
                 tests_running -= test_set.wait()
 
 
@@ -717,7 +727,7 @@ modified date for the test directory."""
         # Leave it up to the caller to deal with time properly.
         return self.path.stat().st_mtime
 
-    def try_cancel(self) -> bool:
+    def check_cancelled(self) -> bool:
         """Try to cancel the test series, if enough time has elapsed since
         the last call to cancel. Return True if the cancelation occurred,
         or False otherwise."""
@@ -725,10 +735,15 @@ modified date for the test directory."""
         now = time.time_ns()
 
         if now - self.last_cancelled > self.cancel_cooldown:
-            if self.CANCEL_FN.exists():
-                self.last_cancelled = now
+            self.last_cancelled = now
 
-                # Do the cancel
+            if self.CANCEL_FN.exists():
+
+                # Reset the cancellation logic
+                self.CANCEL_FN.unlink()
+                self.last_cancelled = float('-inf')
+
+                self.cancel(message='Series cancelled by user')
 
                 return True
 
