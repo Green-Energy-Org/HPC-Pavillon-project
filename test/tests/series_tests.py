@@ -373,3 +373,19 @@ class SeriesTests(PavTestCase):
         series_obj.wait(timeout=10)
 
         return series_obj
+
+    def test_series_cancel(self):
+        """Test that cancellation of series works as expected."""
+
+        cancel_fname = 'series.CANCEL'
+
+        # Create and start a series
+        series_cfg = series_config.generate_series_config('test')
+        ser = series.TestSeries(self.pav_cfg, series_cfg=series_cfg)
+        ser.run()
+
+        # Try to cancel series
+        ser.cancel()
+
+        # Check state to verify that it was cancelled
+        ser.status.has_state('CANCELED')

@@ -33,6 +33,7 @@ from .test_set import TestSet
 from ..errors import TestSetError, TestSeriesError, TestSeriesWarning
 from . import common
 
+
 NANOSECS_PER_SEC = 1_000_000_000
 
 class TestSeries:
@@ -47,7 +48,7 @@ class TestSeries:
     DEPENDENCY_FN = 'dependency'
     OUT_FN = 'series.out'
     PGID_FN = 'series.pgid'
-    CANCEL_FN = 'series.CANCELED'
+    CANCEL_FN = 'series.CANCELLED'
     NAME_RE = re.compile('[a-z][a-z0-9_-]+$')
 
     def __init__(self, pav_cfg: config.PavConfig, series_cfg, _id=None,
@@ -58,6 +59,8 @@ class TestSeries:
         :param series_cfg: Series config, if generated from a series file.
         :param _id: The test id number. If this is given, it implies that
             we're regenerating this series from saved files.
+        :param cancel_cooldown: The minimum time permitted between attempts
+            to cancel the series, in seconds.
         """
 
         self.pav_cfg: config.PavConfig = pav_cfg
@@ -67,7 +70,7 @@ class TestSeries:
         self.outfile = io.StringIO() if outfile is None else outfile
         self.verbosity = verbosity
         self.cancel_cooldown = cancel_cooldown * NANOSECS_PER_SEC
-        self.last_cancelled = float('-inf')
+        self.last_canceled = -math.inf
 
         name = self.config.get('name') or 'unnamed'
         if not self.NAME_RE.match(name):
@@ -361,13 +364,12 @@ differentiate it from test ids."""
 
         self.test_sets = {}
 
-    def cancel(self, message: str = None, cancel_tests: bool = True, cancel_group: bool = False) -> None:
+    def cancel(self, message: str = None, cancel_tests: bool = True) -> None:
         """Goes through all test objects assigned to series and cancels tests
         that haven't been completed.
 
         :param message: Reason to give for cancellation.
         :param cancel_tests: Whether to cancel the attached tests. (Default True)
-        :param cancel_group: Whether to cancel other tests in the same group
         """
 
         if self.pgid and self.pgid != os.getpid():
@@ -380,7 +382,7 @@ differentiate it from test ids."""
             for test in self.tests.values():
                 test.cancel(message or "Cancelled via series. Reason not given.")
 
-            cancel_utils.cancel_jobs(self.pav_cfg, List[self.tests.values()])
+            cancel_utils.cancel_jobs(self.pav_cfg, self.tests.values())
 
         # Drop cancellation file to signal cancellation to other processes
         (self.path / self.CANCEL_FN).touch()
@@ -490,7 +492,7 @@ differentiate it from test ids."""
             self._add_tests(test_batch, test_set.iter_name)
 
             # Cancel tests if a cancel file has been dropped
-            self.check_cancelled()
+            self.check_canceled()
 
             # Build each test
             try:
@@ -507,7 +509,7 @@ differentiate it from test ids."""
             if not test_set.ready_to_start:
                 continue
 
-            self.check_cancelled()
+            self.check_canceled()
 
             try:
                 started_tests, new_jobs = test_set.kickoff()
@@ -534,7 +536,7 @@ differentiate it from test ids."""
             _simultaneous = test_set.simultaneous if test_set.simultaneous else self.simultaneous
             # Wait for jobs until enough have finished to start a new batch.
             while tests_running + self.batch_size > _simultaneous:
-                self.check_cancelled()
+                self.check_canceled()
                 tests_running -= test_set.wait()
 
 
@@ -727,23 +729,24 @@ modified date for the test directory."""
         # Leave it up to the caller to deal with time properly.
         return self.path.stat().st_mtime
 
-    def check_cancelled(self) -> bool:
+    def check_canceled(self) -> bool:
         """Try to cancel the test series, if enough time has elapsed since
         the last call to cancel. Return True if the cancelation occurred,
         or False otherwise."""
 
-        now = time.time_ns()
+        cancel_file = self.path / self.CANCEL_FN
+        now = time.monotonic()
 
-        if now - self.last_cancelled > self.cancel_cooldown:
+        if now - self.last_canceled > self.cancel_cooldown:
             self.last_cancelled = now
 
-            if self.CANCEL_FN.exists():
+            if cancel_file.exists():
 
                 # Reset the cancellation logic
-                self.CANCEL_FN.unlink()
-                self.last_cancelled = float('-inf')
+                cancel_file.unlink()
+                self.last_canceled = -math.inf
 
-                self.cancel(message='Series cancelled by user')
+                self.cancel(message='Series canceled by user')
 
                 return True
 
