@@ -33,6 +33,7 @@ from .test_set import TestSet
 from ..errors import TestSetError, TestSeriesError, TestSeriesWarning
 from . import common
 
+NANOSECS_PER_SEC = 1_000_000_000
 
 class TestSeries:
     """Series are a well defined collection of tests, potentially with
@@ -46,10 +47,11 @@ class TestSeries:
     DEPENDENCY_FN = 'dependency'
     OUT_FN = 'series.out'
     PGID_FN = 'series.pgid'
+    CANCEL_FN = Path('series.CANCELED')
     NAME_RE = re.compile('[a-z][a-z0-9_-]+$')
 
     def __init__(self, pav_cfg: config.PavConfig, series_cfg, _id=None,
-                 verbosity: Verbose = Verbose.HIGH, outfile: TextIO = None):
+                 verbosity: Verbose = Verbose.HIGH, outfile: TextIO = None, cancel_cooldown: float = 0.2):
         """Initialize the series. Test sets may be added via 'add_tests()'.
 
         :param pav_cfg: The pavilion configuration object.
@@ -64,6 +66,8 @@ class TestSeries:
 
         self.outfile = io.StringIO() if outfile is None else outfile
         self.verbosity = verbosity
+        self.cancel_cooldown = cancel_cooldown * NANOSECS_PER_SEC
+        self.last_cancelled = float('-inf')
 
         name = self.config.get('name') or 'unnamed'
         if not self.NAME_RE.match(name):
@@ -712,3 +716,20 @@ differentiate it from test ids."""
 modified date for the test directory."""
         # Leave it up to the caller to deal with time properly.
         return self.path.stat().st_mtime
+
+    def try_cancel(self) -> bool:
+        """Try to cancel the test series, if enough time has elapsed since
+        the last call to cancel. Return True if the cancelation occurred,
+        or False otherwise."""
+
+        now = time.time_ns()
+
+        if now - self.last_cancelled > self.cancel_cooldown:
+            if self.CANCEL_FN.exists():
+                self.last_cancelled = now
+
+                # Do the cancel
+
+                return True
+
+        return False
