@@ -384,9 +384,6 @@ differentiate it from test ids."""
 
             cancel_utils.cancel_jobs(self.pav_cfg, self.tests.values())
 
-        # Drop cancellation file to signal cancellation to other processes
-        (self.path / self.CANCEL_FN).touch()
-
         self.status.set(SERIES_STATES.CANCELED, "Series cancelled: {}".format(message))
 
     def run(self, build_only: bool = False, rebuild: bool = False,
@@ -741,13 +738,15 @@ modified date for the test directory."""
             self.last_cancelled = now
 
             if cancel_file.exists():
-
-                # Reset the cancellation logic
-                cancel_file.unlink()
-                self.last_canceled = -math.inf
-
                 self.cancel(message='Series canceled by user')
 
                 return True
 
         return False
+
+    def _reset_cancelled(self) -> None:
+        """Resets the cancellation state of the series."""
+
+        cancel_file.unlink()
+        self.last_canceled = -math.inf
+        

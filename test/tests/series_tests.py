@@ -1,5 +1,6 @@
 """Tests for the Series object."""
 from collections import OrderedDict
+import time
 
 from pavilion import series
 from pavilion import series_config
@@ -376,16 +377,19 @@ class SeriesTests(PavTestCase):
 
     def test_series_cancel(self):
         """Test that cancellation of series works as expected."""
-
-        cancel_fname = 'series.CANCEL'
-
         # Create and start a series
         series_cfg = series_config.generate_series_config('test')
         ser = series.TestSeries(self.pav_cfg, series_cfg=series_cfg)
-        ser.run()
 
-        # Try to cancel series
-        ser.cancel()
+        cancel_file = ser.path / ser.CANCEL_FN
+
+        ser.run()
+        self.assertFalse(ser.check_canceled())
+
+        cancel_file.touch()
+        self.assertTrue(ser.check_canceled())
+
+        time.sleep(0.5)
 
         # Check state to verify that it was cancelled
-        ser.status.has_state('CANCELED')
+        self.assertTrue(ser.status.has_state('CANCELED'))
