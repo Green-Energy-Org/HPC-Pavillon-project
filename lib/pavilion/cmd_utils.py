@@ -8,8 +8,10 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import List, TextIO, Union
 from collections import defaultdict
+from enum import Enum, auto
+from itertools import chain
+from typing import List, TextIO, Union, Iterator, Iterable, Callable, TypeVar
 
 from pavilion import config
 from pavilion import dir_db
@@ -26,6 +28,33 @@ from pavilion.types import ID_Pair
 
 LOGGER = logging.getLogger(__name__)
 
+T = TypeVar('T')
+
+
+class TestObjectType:
+    TEST = auto()
+    SERIES = auto()
+
+class TestObjectID:
+    def __init__(self, type: TestObjectType, id: int):
+        self.type = type
+        self.id = id
+
+def partition(pred: Callable[[T], bool], lst: List[t]) -> Tuple[Iterator[T], Iterator[T]]:
+    return filter(pred, lst), filterfalse(pred, lst)
+
+def expand_range(rng: str) -> List[str]:
+    split_range = rng.split('-')
+    
+    if len(split_range) == 1:
+        return split_range
+
+    start, end = split_range
+
+    return map(str, range(int(start), int(end)))
+
+def flatten(iter: Iterable[Iterable[T]]) -> Iterable[T]:
+    return chain.from_iterable(iter)
 
 def load_last_series(pav_cfg, errfile: TextIO) -> Union[series.TestSeries, None]:
     """Load the series object for the last series run by this user on this system."""
@@ -79,30 +108,14 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
     sys_name = getattr(args, 'sys_name', sys_vars.get_vars(defer=True).get('sys_name'))
     sort_by = getattr(args, 'sort_by', 'created')
 
-    ids = []
-    for test_range in args.tests:
-        if '-' in test_range:
-            id_start, id_end = test_range.split('-', 1)
-            if id_start.startswith('s'):
-                series_range_start = int(id_start.replace('s',''))
-                if id_end.startswith('s'):
-                    series_range_end = int(id_end.replace('s',''))
-                else:
-                    series_range_end = int(id_end)
-                series_ids = range(series_range_start, series_range_end+1)
-                for sid in series_ids:
-                    ids.append('s' + str(sid))
-            else:
-                test_range_start = int(id_start)
-                test_range_end = int(id_end)
-                test_ids = range(test_range_start, test_range_end+1)
-                for tid in test_ids:
-                    ids.append(str(tid))
-        else:
-            ids.append(test_range)
-    args.tests = ids
+    if args.filter is None:
+        filter_func = filters.const(True) # Always return True
+    else:
+        filter_func = filters.parse_query(args.filter)
 
-    if 'all' in args.tests:
+    if args.tests is None:
+        args.tests.append('last')
+    elif 'all' in args.tests:
         for arg, default in filters.TEST_FILTER_DEFAULTS.items():
             if hasattr(args, arg) and default != getattr(args, arg):
                 break
@@ -111,14 +124,6 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
                                    "created less than 1 day ago.", color=output.CYAN)
             args.filter = make_filter_query()
 
-    if args.filter is None:
-        filter_func = filters.const(True) # Always return True
-    else:
-        filter_func = filters.parse_query(args.filter)
-
-    order_func, order_asc = filters.get_sort_opts(sort_by, "TEST")
-
-    if 'all' in args.tests:
         tests = dir_db.SelectItems([], [])
         working_dirs = set(map(lambda cfg: cfg['working_dir'],
                                pav_cfg.configs.values()))
@@ -136,23 +141,32 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
 
             tests.data.extend(matching_tests.data)
             tests.paths.extend(matching_tests.paths)
+    else:
+        series_ranges, test_ranges = partion(lambda x: x[0] == 's', args.tests)
 
-        return tests
+        test_ranges = map(expand_range, test_ranges)
+        test_ids = flatten(test_ranges)
 
-    if not args.tests:
-        args.tests.append('last')
+        series_ranges = map(lambda x: x.replace('s', ''), series_ranges)
+        series_ids = map(expand_range, series_ranges)
+        series_ids = flatten(series_ids)
+        series_ids = map(lambda x: f"s{x}", series_ids)
 
-    test_paths = test_list_to_paths(pav_cfg, args.tests, verbose)
+        order_func, order_asc = filters.get_sort_opts(sort_by, "TEST")
 
-    return dir_db.select_from(
-        pav_cfg,
-        paths=test_paths,
-        transform=TestAttributes,
-        filter_func=filter_func,
-        order_func=order_func,
-        order_asc=order_asc,
-        limit=limit
-    )
+        test_paths = test_list_to_paths(pav_cfg, test_ids, verbose)
+
+        tests = dir_db.select_from(
+            pav_cfg,
+            paths=test_paths,
+            transform=TestAttributes,
+            filter_func=filter_func,
+            order_func=order_func,
+            order_asc=order_asc,
+            limit=limit
+        )
+
+    return tests
 
 
 def make_filter_query() -> str:
@@ -543,3 +557,43 @@ def get_testset_name(pav_cfg, tests: List['str'], files: List['str']):
 
     testset_name = ','.join(globs).rstrip(',')
     return testset_name
+
+
+def string_id_to_obj(id: str) -> TestObjectID:
+    if id[0] == 's':
+        type = TestObjectType.SERIES 
+    else:
+        type = TestObjectType.TEST
+
+    return TestObjectID(type, int(id))
+
+
+def expand_range(rng: str) -> Iterator[str]:
+    split_rng = rng.split()
+
+    if len(split_rng) == 1:
+        return split_rng
+
+    if len(split_rng) > 2:
+        raise ValueError(f"Invalid syntax for range: {rng}")
+
+    start, stop = split_rng
+
+    prefix = ''
+
+    if start[0] == 's':
+        prefix = 's'
+        
+    start = start.replace('s', '')
+    stop = stop.replace('s', '')
+
+    rng = range(int(start), int(stop))
+
+    return map(lambda x: f"{prefix}{x}", rng)
+
+
+def test_ids_to_objs(ids: Iterable[str]) -> Iterator[TestObjectID]:
+    expanded = map(expand_range, ids)
+    flattened = chain.from_iterable(expanded)
+
+    return map(string_id_to_obj, flattened)

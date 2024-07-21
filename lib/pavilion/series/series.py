@@ -27,6 +27,7 @@ from pavilion.series_config import SeriesConfigLoader
 from pavilion.status_file import SeriesStatusFile, SERIES_STATES
 from pavilion.test_run import TestRun
 from pavilion.types import ID_Pair
+from pavilion.abc import Cancellable
 from yaml_config import YAMLError, RequiredError
 from .info import SeriesInfo
 from .test_set import TestSet
@@ -36,7 +37,7 @@ from . import common
 
 NANOSECS_PER_SEC = 1_000_000_000
 
-class TestSeries:
+class TestSeries(Cancellable):
     """Series are a well defined collection of tests, potentially with
     relationships, skip conditions, and other features by test set. The test runs
     in a series include all tests that have been created for that series, but not

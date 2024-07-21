@@ -48,8 +48,6 @@ class CancelCommand(Command):
             if series_id is not None:
                 args.tests.append(series_id)
 
-        cancelled_series = False
-
         test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
 
         tests = cmd_utils.get_tests_by_paths(pav_cfg, test_paths, errfile=self.errfile)
