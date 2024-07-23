@@ -42,11 +42,7 @@ class CancelCommand(Command):
     def run(self, pav_cfg, args):
         """Cancel the given tests."""
 
-        if not args.tests:
-            # Get the last series ran by this user.
-            series_id = series.load_user_series_id(pav_cfg)
-            if series_id is not None:
-                args.tests.append(series_id)
+        test_ids = resolve_test_ids(args.tests)
 
         test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
 

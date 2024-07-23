@@ -1,3 +1,4 @@
+# pylint: disable=W0221
 """Series are built around a config that specifies a 'series' of tests to run. It
 also tracks the tests that have run under it."""
 import io
@@ -53,7 +54,8 @@ class TestSeries(Cancellable):
     NAME_RE = re.compile('[a-z][a-z0-9_-]+$')
 
     def __init__(self, pav_cfg: config.PavConfig, series_cfg, _id=None,
-                 verbosity: Verbose = Verbose.HIGH, outfile: TextIO = None, cancel_cooldown: float = 0.2):
+                 verbosity: Verbose = Verbose.HIGH, outfile: TextIO = None,
+                 cancel_cooldown: float = 0.2):
         """Initialize the series. Test sets may be added via 'add_tests()'.
 
         :param pav_cfg: The pavilion configuration object.
@@ -71,7 +73,7 @@ class TestSeries(Cancellable):
         self.outfile = io.StringIO() if outfile is None else outfile
         self.verbosity = verbosity
         self.cancel_cooldown = cancel_cooldown * NANOSECS_PER_SEC
-        self.last_canceled = -math.inf
+        self.last_cancelled = -math.inf
 
         name = self.config.get('name') or 'unnamed'
         if not self.NAME_RE.match(name):
@@ -735,7 +737,7 @@ modified date for the test directory."""
         cancel_file = self.path / self.CANCEL_FN
         now = time.monotonic()
 
-        if now - self.last_canceled > self.cancel_cooldown:
+        if now - self.last_cancelled > self.cancel_cooldown:
             self.last_cancelled = now
 
             if cancel_file.exists():
@@ -749,5 +751,4 @@ modified date for the test directory."""
         """Resets the cancellation state of the series."""
 
         cancel_file.unlink()
-        self.last_canceled = -math.inf
-        
+        self.last_cancelled = -math.inf

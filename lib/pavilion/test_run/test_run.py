@@ -2,6 +2,7 @@
 the list of all known test runs."""
 
 # pylint: disable=too-many-lines
+# pylint: disable=W0221
 import copy
 import json
 import logging
