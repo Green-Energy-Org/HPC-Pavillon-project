@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from collections import defaultdict
 from enum import Enum, auto
-from itertools import chain, filterfalse
+from itertools import chain, filterfalse, starmap
 from typing import (List, TextIO, Union, Iterator, Iterable,
                     Callable, TypeVar, Tuple, Optional, Any)
 
@@ -123,9 +123,9 @@ def resolve_series_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
     if 'all' in ranges:
         return ['all']
 
-    ranges = convert_last(ranges)
-    ranges = map(lambda x: x.replace('s', ''), series_ranges)
-    series_ids = expand_ranges(series_ranges)
+    ranges = convert_last(ranges, pav_cfg)
+    ranges = map(lambda x: x.replace('s', ''), ranges)
+    series_ids = expand_ranges(ranges)
 
     return unique(map(lambda x: f"s{x}", series_ids))
 
@@ -188,14 +188,17 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
     args.tests = resolve_test_ids(args.tests, pav_cfg)
 
     if 'all' in args.tests:
-        args_specified = map(arg_specified, filters.TEST_FILTER_DEFAULTS.items())
+        args_specified = starmap(
+            lambda key, value: arg_specified(args, key, value),
+            filters.SERIES_FILTER_DEFAULTS.items()
+        )
 
-        if not any(args_specifed):
+        if not any(args_specified):
             output.fprint(verbose, "Using default search filters: The current system, user, and "
                                    "created less than 1 day ago.", color=output.CYAN)
             filter_func = make_default_filter_query()
 
-        tests = get_all_tests(pav_cfg, sort_by, filter_func, verbose)
+        tests = get_all_tests(pav_cfg, sort_by, filter_func, limit, verbose)
     else:
         if args.tests is None:
             args.tests = [get_last_id(pav_cfg)]
@@ -247,7 +250,7 @@ def arg_specified(args: argparse.Namespace, arg: str, default: Any) -> bool:
 
     return hasattr(args, arg) and getattr(args, arg) != default
 
-def get_all_tests(pav_cfg: PavConfig, sort_by: str, filter_func: Callable, verbose):
+def get_all_tests(pav_cfg: PavConfig, sort_by: str, filter_func: Callable, limit, verbose: TextIO):
     tests = dir_db.SelectItems([], [])
     working_dirs = set(map(lambda cfg: cfg['working_dir'],
                            pav_cfg.configs.values()))
@@ -270,7 +273,7 @@ def get_all_tests(pav_cfg: PavConfig, sort_by: str, filter_func: Callable, verbo
 
     return tests
 
-def get_all_series(pav_cfg: PavConfig, sort_by, filter_func: Callable, verbose):
+def get_all_series(pav_cfg: PavConfig, sort_by, filter_func: Callable, limit, verbose: TextIO):
     order_func, order_asc = filters.get_sort_opts(sort_by, 'SERIES')
 
     return dir_db.select(
@@ -298,11 +301,11 @@ def arg_filtered_series(pav_cfg: config.PavConfig, args: argparse.Namespace,
     if args.series is None:
         args.series = ['last']
 
-    args.series = resolve_series_ids(args.series)
+    args.series = resolve_series_ids(args.series, pav_cfg)
 
     if 'all' in args.series:
-        args_specified = map(
-            lambda x: arg_specified(args, x.key(), x.value()),
+        args_specified = starmap(
+            lambda key, value: arg_specified(args, key, value),
             filters.SERIES_FILTER_DEFAULTS.items()
         )
 
@@ -318,10 +321,10 @@ def arg_filtered_series(pav_cfg: config.PavConfig, args: argparse.Namespace,
         else:
             filter_func = filters.parse_query(args.filter)
 
-        found_series = get_all_series(pav_cfg, sort_by, filter_func, verbose)
+        found_series = get_all_series(pav_cfg, sort_by, filter_func, limit, verbose)
 
     else:
-        found_series = map(lambda x: series.SeriesInfo.load(pav_cfg, x), args,series)
+        found_series = list(map(lambda x: series.SeriesInfo.load(pav_cfg, x), args.series))
 
     return found_series
 

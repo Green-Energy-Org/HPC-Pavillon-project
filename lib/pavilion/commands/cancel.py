@@ -42,7 +42,7 @@ class CancelCommand(Command):
     def run(self, pav_cfg, args):
         """Cancel the given tests."""
 
-        test_ids = resolve_test_ids(args.tests)
+        test_ids = cmd_utils.resolve_test_ids(args.tests, pav_cfg)
 
         test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
 
