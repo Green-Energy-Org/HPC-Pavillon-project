@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from collections import defaultdict
 from enum import Enum, auto
-from itertools import chain, filterfalse, starmap
+from itertools import chain, filterfalse, starmap, tee
 from typing import (List, TextIO, Union, Iterator, Iterable,
                     Callable, TypeVar, Tuple, Optional, Any)
 
@@ -38,7 +38,9 @@ def partition(pred: Callable[[T], bool], lst: Iterable[T]) -> Tuple[Iterator[T],
     for which the given predicate is true and one consisting of those for
     which it is false."""
 
-    return filter(pred, lst), filterfalse(pred, lst)
+    f_true, f_false = tee(lst)
+
+    return filter(pred, f_true), filterfalse(pred, f_false)
 
 def flatten(lst: Iterable[Iterable[T]]) -> Iterator[T]:
     """Convert a singly nested iterable into an unnested iterable."""
@@ -95,9 +97,10 @@ def unique(lst: Iterable[T]) -> List[T]:
     return list(set(lst))
 
 def convert_last(raw_ids: Iterable[str], pav_cfg: PavConfig, errfile = None) -> List[str]:
-    lastless = remove_all(raw_ids, 'last')
+    raw_ids = list(raw_ids)
+    lastless = list(remove_all(raw_ids, 'last'))
 
-    if len(list(lastless)) == len(list(raw_ids)):
+    if len(lastless) == len(raw_ids):
         return raw_ids
 
     last_id = get_last_id(pav_cfg, errfile)
@@ -113,21 +116,41 @@ def is_test_id(raw_id: str) -> bool:
 def is_series_id(raw_id: str) -> bool:
     return raw_id[0] == 's' and utils.is_int(raw_id[1:])
 
-def resolve_test_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
-    if 'all' in ranges:
+def resolve_test_ids(ranges: Iterable[str]) -> List[str]:
+    r1, r2 = tee(ranges)
+
+    if 'all' in r1:
         return ['all']
 
-    return unique(expand_ranges(ranges))
+    expanded = expand_ranges(r2)
+
+    return unique(expanded)
 
 def resolve_series_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
-    if 'all' in ranges:
+
+    r1, r2 = tee(ranges)
+
+    if 'all' in r1:
         return ['all']
 
-    ranges = convert_last(ranges, pav_cfg)
+    ranges = convert_last(r2, pav_cfg)
     ranges = map(lambda x: x.replace('s', ''), ranges)
     series_ids = expand_ranges(ranges)
 
     return unique(map(lambda x: f"s{x}", series_ids))
+
+def resolve_all_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
+    r1, r2 = tee(ranges)
+
+    if ['all'] in r1:
+        return ['all']
+
+    series_ranges, test_ranges = partition(lambda rng: rng[0] == 's', r2)
+
+    test_ids = resolve_test_ids(test_ranges)
+    series_ids = resolve_series_ids(series_ranges, pav_cfg)
+
+    return chain.from_iterable([test_ids, series_ids])
 
 def load_last_series(pav_cfg, errfile: TextIO) -> Union[series.TestSeries, None]:
     """Load the series object for the last series run by this user on this system."""
@@ -185,7 +208,7 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
     else:
         filter_func = filters.parse_query(args.filter)
 
-    args.tests = resolve_test_ids(args.tests, pav_cfg)
+    args.tests = resolve_all_ids(args.tests, pav_cfg)
 
     if 'all' in args.tests:
         args_specified = starmap(
@@ -207,7 +230,7 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
         series_ranges, test_ranges = partition(lambda x: x[0] == 's', ids)
 
         test_ids = unique(expand_ranges(test_ranges))
-        series_ids = unique(expand_series_ranges(test_ranges))
+        series_ids = unique(expand_series_ranges(series_ranges))
 
         test_ids.extend(series_ids)
 
@@ -438,7 +461,6 @@ def test_list_to_paths(pav_cfg, req_tests, errfile=None) -> List[Path]:
                     .format(raw_id))
 
     return test_paths
-
 
 def _filter_tests_by_raw_id(pav_cfg, id_pairs: List[ID_Pair],
                             exclude_ids: List[str]) -> List[ID_Pair]:
