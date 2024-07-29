@@ -539,7 +539,7 @@ def get_tests_by_id(pav_cfg, test_ids: List['str'], errfile: TextIO,
     :return: List of test objects
     """
 
-    test_ids = [str(test) for test in test_ids.copy()]
+    test_ids = list(map(str, test_ids))
 
     if not test_ids:
         # Get the last series ran by this user

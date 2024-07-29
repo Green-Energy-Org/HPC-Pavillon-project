@@ -92,7 +92,7 @@ def cancel_tests(pav_cfg: PavConfig, tests: Iterable[TestRun], outfile: TextIO,
                   for test in cancelled_test_info])
     else:
         output.fprint(outfile, "No tests needed to be cancelled.")
-        return
+        return 0
 
     timeout = time.time() + max_wait
     wait_tests = list(tests)
@@ -141,4 +141,4 @@ def cancel_tests(pav_cfg: PavConfig, tests: Iterable[TestRun], outfile: TextIO,
                                    "Use `pav series cancel` to cancel the series itself.")
             break
 
-    return
+    return 0
