@@ -208,7 +208,7 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
     else:
         filter_func = filters.parse_query(args.filter)
 
-    args.tests = resolve_all_ids(args.tests, pav_cfg)
+    args.tests = list(resolve_all_ids(args.tests, pav_cfg))
 
     if 'all' in args.tests:
         args_specified = starmap(
@@ -551,6 +551,7 @@ def get_tests_by_id(pav_cfg, test_ids: List['str'], errfile: TextIO,
 
     # Convert series and test ids into test paths.
     test_id_pairs = []
+
     for raw_id in test_ids:
         # Series start with 's' (like 'snake') and never have labels
         if '.' not in raw_id and raw_id.startswith('s'):
