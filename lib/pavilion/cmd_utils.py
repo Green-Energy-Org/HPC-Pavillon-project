@@ -58,7 +58,7 @@ def expand_range(rng: str) -> Union[List[str], Iterator[str]]:
 
     start, end = split_range
 
-    return map(str, range(int(start), int(end)))
+    return map(str, range(int(start), int(end) + 1))
 
 def expand_series_range(rng: str) -> Union[List[str], Iterator[str]]:
     rng = rng.replace('s', '')
@@ -127,7 +127,6 @@ def resolve_test_ids(ranges: Iterable[str]) -> List[str]:
     return unique(expanded)
 
 def resolve_series_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
-
     r1, r2 = tee(ranges)
 
     if 'all' in r1:
