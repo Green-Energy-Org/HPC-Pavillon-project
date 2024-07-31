@@ -36,8 +36,6 @@ from ..errors import TestSetError, TestSeriesError, TestSeriesWarning
 from . import common
 
 
-NANOSECS_PER_SEC = 1_000_000_000
-
 class TestSeries(Cancellable):
     """Series are a well defined collection of tests, potentially with
     relationships, skip conditions, and other features by test set. The test runs
@@ -72,7 +70,7 @@ class TestSeries(Cancellable):
 
         self.outfile = io.StringIO() if outfile is None else outfile
         self.verbosity = verbosity
-        self.cancel_cooldown = cancel_cooldown * NANOSECS_PER_SEC
+        self.cancel_cooldown = cancel_cooldown
         self.last_cancelled = -math.inf
 
         name = self.config.get('name') or 'unnamed'

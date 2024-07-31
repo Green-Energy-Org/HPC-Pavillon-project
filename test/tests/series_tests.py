@@ -387,6 +387,9 @@ class SeriesTests(PavTestCase):
         self.assertFalse(ser.check_canceled())
 
         cancel_file.touch()
+
+        time.sleep(0.3)
+
         self.assertTrue(ser.check_canceled())
 
         time.sleep(0.5)
