@@ -117,34 +117,34 @@ def is_series_id(raw_id: str) -> bool:
     return raw_id[0] == 's' and utils.is_int(raw_id[1:])
 
 def resolve_test_ids(ranges: Iterable[str]) -> List[str]:
-    r1, r2 = tee(ranges)
+    ranges1, ranges2 = tee(ranges)
 
-    if 'all' in r1:
+    if 'all' in ranges1:
         return ['all']
 
-    expanded = expand_ranges(r2)
+    expanded = expand_ranges(ranges2)
 
     return unique(expanded)
 
 def resolve_series_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
-    r1, r2 = tee(ranges)
+    ranges1, ranges2 = tee(ranges)
 
-    if 'all' in r1:
+    if 'all' in ranges1:
         return ['all']
 
-    ranges = convert_last(r2, pav_cfg)
+    ranges = convert_last(ranges2, pav_cfg)
     ranges = map(lambda x: x.replace('s', ''), ranges)
     series_ids = expand_ranges(ranges)
 
     return unique(map(lambda x: f"s{x}", series_ids))
 
 def resolve_all_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
-    r1, r2 = tee(ranges)
+    ranges1, ranges2 = tee(ranges)
 
-    if ['all'] in r1:
+    if ['all'] in ranges1:
         return ['all']
 
-    series_ranges, test_ranges = partition(lambda rng: rng[0] == 's', r2)
+    series_ranges, test_ranges = partition(lambda rng: rng[0] == 's', ranges2)
 
     test_ids = resolve_test_ids(test_ranges)
     series_ids = resolve_series_ids(series_ranges, pav_cfg)
