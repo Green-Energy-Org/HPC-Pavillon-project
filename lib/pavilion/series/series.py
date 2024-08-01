@@ -365,7 +365,7 @@ differentiate it from test ids."""
 
         self.test_sets = {}
 
-    def cancel(self, message: str = None, cancel_tests: bool = True) -> None:
+    def _cancel(self, message: str = None, cancel_tests: bool = True) -> None:
         """Goes through all test objects assigned to series and cancels tests
         that haven't been completed.
 
@@ -386,6 +386,12 @@ differentiate it from test ids."""
             cancel_utils.cancel_jobs(self.pav_cfg, self.tests.values())
 
         self.status.set(SERIES_STATES.CANCELED, "Series cancelled: {}".format(message))
+
+    def cancel(self, message: str = None, cancel_tests: bool = True) -> None:
+        cancel_file = self.path / self.CANCEL_FN
+        cancel_file.touch()
+
+        self._cancel(message, cancel_tests)
 
     def run(self, build_only: bool = False, rebuild: bool = False,
             local_builds_only: bool = False):
@@ -739,7 +745,7 @@ modified date for the test directory."""
             self.last_cancelled = now
 
             if cancel_file.exists():
-                self.cancel(message='Series canceled by user')
+                self._cancel(message='Series canceled by user')
 
                 return True
 

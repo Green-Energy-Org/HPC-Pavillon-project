@@ -41,11 +41,16 @@ class CancelCommand(Command):
 
     def run(self, pav_cfg, args):
         """Cancel the given tests."""
+        
+        if not 'all' in args.tests:
+            is_series = lambda x: x == 'last' or x[0] == 's'
 
-        test_ids = cmd_utils.resolve_test_ids(args.tests)
+            series_ranges, test_ranges = cmd_utils.partition(is_series, args.tests)
+
+            series_ids = resolve_series_ids(series_ranges)
+            test_ids = resolve_test_ids(test_ranges)
 
         test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
-
         tests = cmd_utils.get_tests_by_paths(pav_cfg, test_paths, errfile=self.errfile)
 
         return cancel_utils.cancel_tests(pav_cfg, tests, self.outfile)
