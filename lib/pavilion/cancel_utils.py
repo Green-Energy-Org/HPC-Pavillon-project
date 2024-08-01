@@ -67,7 +67,7 @@ SERIES_WARN_EXPIRE = 60*60*24  # 24 hours
 
 
 def cancel_tests(pav_cfg: PavConfig, tests: Iterable[TestRun], outfile: TextIO,
-                 max_wait: float = 3.0, no_series_warning: bool = False) -> None:
+                 max_wait: float = 3.0, no_series_warning: bool = False) -> int:
     """Cancel all of the given tests, printing useful user messages and error information."""
 
     user = utils.get_login()
