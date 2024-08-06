@@ -52,6 +52,10 @@ class CancelCommand(Command):
             series_ids = cmd_utils.resolve_series_ids(series_ranges, pav_cfg)
             test_ids = cmd_utils.resolve_test_ids(test_ranges)
 
+            args.tests = series_ids + test_ids
+        else:
+            args.tests = ['all']
+
         test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
         tests = cmd_utils.get_tests_by_paths(pav_cfg, test_paths, errfile=self.errfile)
 
