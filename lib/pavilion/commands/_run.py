@@ -234,6 +234,7 @@ class _RunCommand(Command):
         except TestRunError as err:
             # An unexpected TestRunError
             test.status.set(STATES.RUN_ERROR, err)
+            return
         except TimeoutError:
             # This is expected
             pass
