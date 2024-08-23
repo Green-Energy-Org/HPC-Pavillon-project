@@ -237,7 +237,7 @@ class _RunCommand(Command):
             return
         except TimeoutError:
             # This is expected
-            pass
+            return
         except Exception:
             # Some other unexpected exception.
             test.status.set(
