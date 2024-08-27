@@ -1,5 +1,6 @@
 from pavilion import expression_functions
 from pavilion.unittest import PavTestCase
+from pavilion.errors import FunctionPluginError
 
 
 class ExprFuncTests(PavTestCase):
@@ -54,6 +55,11 @@ class ExprFuncTests(PavTestCase):
                                  (({'a': {'i': 1}, 'b': {'i': 2}}, 1.5, 'i'), {'b': {'i': 2}})],
             'low_pass_filter': [(({'a': 1, 'b': 2, 'c': 3}, 2), {'a': 1}),
                                 (({'a': {'i': 1}, 'b': {'i': 2}}, 1.5, 'i'), {'a': {'i': 1}})],
+            'flag': [(('--foo', 'True'), '--foo'), (('--foo', 'False'), '')],
+            'opt': [(('--foo', ['a', 'b', 'c']), "--foo=a,b,c"), (('--foo', 'a'), "--foo=a"),
+                (('--foo', 'none'), ''), (('--foo', []), '')],
+            'sopt': [(('--foo', ['a', 'b', 'c']), "--foo=a --foo=b --foo=c"),
+                (('--foo', 'a'), "--foo=a"), (('--foo', 'none'), ''), (('--foo', []), '')],
             'factors': [((1,), (1,)), ((2,), (1, 2)), ((10,), (1, 2, 5, 10)), ((16,), (1, 2, 4, 8, 16))],
             'midfactors': [((1,), (1, 1)), ((2,), (1, 2)), ((4,), (2, 2)), ((28,), (4, 7))],
             'multiples_of_two': [((1,), [1]), ((2,), [1, 2]), ((3,), [1, 2]),

@@ -7,7 +7,7 @@ import re
 from itertools import count, takewhile
 from typing import List, Dict, Union, Tuple
 
-from .base import FunctionPlugin, num, Opt
+from .base import FunctionPlugin, num, opt, sopt, flag, Opt, MaybeList
 from ..errors import FunctionPluginError, FunctionArgError
 
 
@@ -587,3 +587,44 @@ class Outliers(CoreFunctionPlugin):
                 deviations[names[i]] = dev
 
         return deviations
+
+class FlagPlugin(CoreFunctionPlugin):
+    """Convert a boolean(-ish) config option into a UNIX-style flag.
+    """
+
+    def __init__(self):
+        super().__init__(
+            'flag',
+            arg_specs=(str, str) # Should this first arg be a str or a bool?
+        )
+
+    @staticmethod
+    def flag(flag_str: str, val: str):
+        return flag(flag_str, val)
+
+class SoptPlugin(CoreFunctionPlugin):
+    """Convert a config option into a UNIX-style option string. If the
+    option is a list, create a separate option string for each element."""
+
+    def __init__(self):
+        super().__init__(
+            'sopt',
+            arg_specs=(str, MaybeList(str))
+        )
+
+    @staticmethod
+    def sopt(opt_str: str, val: Union[str, List[str]]) -> str:
+        return sopt(opt_str, val)
+
+class OptPlugin(CoreFunctionPlugin):
+    """Convert a config option into a UNIX-style option string. If the option is
+    a list, concatenate the elements of the list to form a single option."""
+    def __init__(self):
+        super().__init__(
+            'opt',
+            arg_specs=(str, MaybeList(str), Opt(str))
+        )
+
+    @staticmethod
+    def opt(opt_str: str, val: Union[str, List[str]], delimiter: str = ',') -> str:
+        return opt(opt_str, val, delimiter)

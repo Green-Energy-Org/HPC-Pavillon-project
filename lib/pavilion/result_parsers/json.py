@@ -2,6 +2,9 @@
 
 import json
 import re
+from typing import Dict, Tuple, Optional
+
+from pavilion.utils import IndentedLog
 
 import yaml_config as yc
 from . import base_classes
@@ -41,35 +44,57 @@ class Json(base_classes.ResultParser):
         )
 
     # pylint: disable=arguments-differ
-    def __call__(self, file, include_only=None, exclude=None, stop_at=None):
+    def __call__(self, file, include_only=None, exclude=None,
+                    stop_at=None) -> Tuple[Optional[Dict], IndentedLog]:
+        log = IndentedLog()
 
-        json_object = self.parse_json(file, stop_at)
+        if include_only is None:
+            include_only = []
+
+        if exclude is None:
+            include_only = []
+
+        json_object = self.parse_json(file, stop_at, log)
 
         if json_object is None:
-            return None
+            return None, log
 
-        if exclude is not None:
+        if len(exclude) > 0:
+            log(f"Excluding keys: {exclude}")
+
             json_object = self.exclude_keys(json_object, exclude)
-        if include_only is not None:
+        if len(include_only) > 0:
+            log(f"Only including keys: {include_only}")
+
             json_object = self.include_only_keys(json_object, include_only)
 
-        return json_object
+        return json_object, log
 
-    def parse_json(self, file, stop_at):
+    def parse_json(self, file, stop_at, log):
         _ = self
 
         if stop_at is None:
+            log("No stop_at regex provided. Reading entire file")
+
             try:
-                return json.load(file)
+                res = json.load(file)
+
+                log(f"Read JSON object with {len(res)} key(s)")
+
+                return res
             except json.JSONDecodeError as err:
                 raise ValueError("Invalid JSON: {}".format(err))
 
         else:
+            log(f"Reading until regex: {stop_at}")
             lines = []
-            for line in file:
+
+            for line_count, line in enumerate(file):
                 if re.search(stop_at, line):
+                    log("Encountered stop regex (read {line_count} lines)")
                     break
                 lines.append(line)
+
             json_string = ''.join(lines)
 
             try:
