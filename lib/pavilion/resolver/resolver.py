@@ -855,7 +855,7 @@ class TestConfigResolver:
 
             # Basic information that all test configs should have.
             test_cfg['name'] = test_cfg_name
-            # test_cfg['cfg_label'] = cfg_label
+            test_cfg['cfg_label'] = cfg_info.label
             working_dir = self.pav_cfg['configs'][cfg_info.label]['working_dir']
             test_cfg['working_dir'] = working_dir.as_posix()
             test_cfg['suite'] = suite_name
