@@ -15,7 +15,7 @@ import threading
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Union, Dict, Optional
+from typing import Union, Dict, Optional, List, TextIO
 from contextlib import ExitStack
 
 import pavilion.config
@@ -27,6 +27,7 @@ from pavilion.errors import TestBuilderError, TestConfigError
 from pavilion.status_file import TestStatusFile, STATES
 from pavilion.test_config import parse_timeout
 from pavilion.test_config.spack import SpackEnvConfig
+from pavilion.micro import set_default
 
 
 class TestBuilder:
@@ -961,7 +962,7 @@ class TestBuilder:
         return file_hash
 
     @classmethod
-    def _hash_io(cls, contents):
+    def _hash_io(cls, contents: TextIO) -> bytes:
         """Hash the given file in IOString format.
         :param IOString contents: file name (as relative path to build
                                   directory) and file contents to hash."""
@@ -974,17 +975,27 @@ class TestBuilder:
 
         return hash_obj.digest()
 
-    @staticmethod
-    def _hash_dir(path):
-        """Instead of hashing the files within a directory, we just create a
-            'hash' based on it's name and mtime, assuming we've run _date_dir
-            on it before hand. This produces an arbitrary string, not a hash.
-        :param Path path: The path to the directory.
-        :returns: The 'hash'
+    @classmethod
+    def _hash_dir(cls, path: Path, exclude: List[str] = None) -> str:
+        """Recursively hash the files in the given directory, excluding
+        files with the given suffixes.
+
+        We might need to modify this to handle circular symlinks.
         """
 
-        dir_stat = path.stat()
-        return '{} {:0.5f}'.format(path, dir_stat.st_mtime).encode()
+        exclude = set_default(exclude, [])
+
+        # Order is indeterminate, so sort them
+        files = sorted(path.rglob('*'))
+        files = filter(lambda x: x.suffix not in exclude, files)
+
+        hash_obj = hashlib.sha256()
+
+        for file in files:
+            with open(file, 'w') as fin:
+                hash_obj.update(cls._hash_io(fin))
+
+        return hash_obj.hexdigest()
 
     @staticmethod
     def _isurl(url):
