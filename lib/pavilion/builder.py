@@ -15,7 +15,7 @@ import threading
 import time
 import urllib.parse
 from pathlib import Path
-from typing import Union, Dict, Optional, List, TextIO
+from typing import Union, Dict, Optional, List, IO
 from contextlib import ExitStack
 
 import pavilion.config
