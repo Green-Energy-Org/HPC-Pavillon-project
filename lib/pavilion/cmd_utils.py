@@ -10,9 +10,9 @@ import time
 from pathlib import Path
 from collections import defaultdict
 from enum import Enum, auto
-from itertools import chain, filterfalse, starmap, tee
+from itertools import chain, starmap, tee
 from typing import (List, TextIO, Union, Iterator, Iterable,
-                    Callable, TypeVar, Tuple, Optional, Any)
+                    Callable, TypeVar, Optional, Any)
 
 from pavilion import config
 from pavilion import dir_db
@@ -27,24 +27,12 @@ from pavilion.errors import TestRunError, CommandError, TestSeriesError, \
                             PavilionError, TestGroupError
 from pavilion.test_run import TestRun, load_tests, TestAttributes
 from pavilion.types import ID_Pair
+from pavilion.micro import listmap
 
 LOGGER = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
-
-def partition(pred: Callable[[T], bool], lst: Iterable[T]) -> Tuple[Iterator[T], Iterator[T]]:
-    """Partition the sequence into two sequences: one consisting of the elements
-    for which the given predicate is true and one consisting of those for
-    which it is false."""
-
-    f_true, f_false = tee(lst)
-
-    return filter(pred, f_true), filterfalse(pred, f_false)
-
-def flatten(lst: Iterable[Iterable[T]]) -> Iterator[T]:
-    """Convert a singly nested iterable into an unnested iterable."""
-    return chain.from_iterable(lst)
 
 def expand_range(rng: str) -> Union[List[str], Iterator[str]]:
     """Expand an integer range (given as a string) into the
@@ -89,12 +77,6 @@ def get_last_id(pav_cfg: PavConfig, errfile = None) -> Optional[str]:
         return
 
     return raw_id
-
-def remove_all(lst: Iterable[T], item: T) -> Iterator[T]:
-    return filter(lambda x: x != item, lst)
-
-def unique(lst: Iterable[T]) -> List[T]:
-    return list(set(lst))
 
 def convert_last(raw_ids: Iterable[str], pav_cfg: PavConfig, errfile = None) -> List[str]:
     raw_ids = list(raw_ids)
@@ -346,7 +328,7 @@ def arg_filtered_series(pav_cfg: config.PavConfig, args: argparse.Namespace,
         found_series = get_all_series(pav_cfg, sort_by, filter_func, limit, verbose)
 
     else:
-        found_series = list(map(lambda x: series.SeriesInfo.load(pav_cfg, x), args.series))
+        found_series = listmap(lambda x: series.SeriesInfo.load(pav_cfg, x), args.series)
 
     return found_series
 
