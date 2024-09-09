@@ -62,27 +62,19 @@ def parse_duration(rval: str, now: datetime) -> datetime:
     if unit not in UNITS:
         raise ValueError(f"Invalid unit {unit} for duration")
 
-    if unit not in ("years", "months"):
-        return now - timedelta(**{unit: mag})
-
-    new_day = now.day
-
     if unit == 'years':
-        new_year = now.year - mag
-        new_month = now.month
+        return safe_update(now, year=now.year - mag)
 
     if unit == 'months':
         dyear, dmonth = divmod(mag, MONTHS_PER_YEAR)
+
+        new_day = now.day
+        new_month = now.month - dmonth
         new_year = now.year - dyear
-        new_month = (now.month - dmonth) % MONTHS_PER_YEAR
 
-    max_day = monthrange(new_year, new_month)[1]
+        return safe_update(now, year=new_year, month=new_month, day=new_day)
 
-    if new_day > max_day:
-        new_day = max_day
-
-    return now.replace(year=new_year, month=new_month, day=new_day)
-
+    return now - timedelta(**{unit: mag})
 
 
 def parse_iso_date(rval: str) -> date:
@@ -150,3 +142,24 @@ def normalize(unit: str) -> str:
         return unit + "s"
 
     return unit
+
+
+def safe_update(date: datetime,
+                year: int = None,
+                month: int = None, day: int = None) -> datetime:
+    if year is None:
+        year = date.year
+    if month is None:
+        month = date.month
+    if day is None:
+        day = date.day
+
+    max_day = monthrange(year, month)[1]
+
+    # If the day is too large, adjust it to be the last day
+    # of the new month. This might not be the best solution,
+    # but it's a reasonable way to handle it.
+    if day > max_day:
+        day = max_day
+
+    return date.replace(year=year, month=month, day=day)
