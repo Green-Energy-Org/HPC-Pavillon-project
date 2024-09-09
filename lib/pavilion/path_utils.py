@@ -15,10 +15,10 @@ def append_path(suffix: Pathlike) -> Callable[[Path], Path]:
     """Constructs a function that appends the given suffix
     to a path. Intended for use with map."""
 
-    def f(path: Path) -> Path:
+    def func(path: Path) -> Path:
         return path / suffix
 
-    return f
+    return func
 
 def shortpath(path: Path, parents: int = 1) -> Path:
     """Return an abbreviated version of a path, where only

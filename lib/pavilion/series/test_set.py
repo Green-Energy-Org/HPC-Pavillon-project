@@ -715,7 +715,8 @@ class TestSet:
 
     TEST_WAIT_PERIOD = 0.5
 
-    def wait(self, wait_for_all=False, wait_period: int = TEST_WAIT_PERIOD, timeout: int = None) -> int:
+    def wait(self, wait_for_all=False, wait_period: int = TEST_WAIT_PERIOD,
+             timeout: int = None) -> int:
         """Wait for tests to complete. Returns the number of jobs that completed for this
         call to wait.
 

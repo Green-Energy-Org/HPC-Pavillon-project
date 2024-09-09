@@ -57,7 +57,9 @@ TestConfig = Dict
 
 
 class ConfigInfo:
-    def __init__(self, name: str, type: str, path: Path, label: str = None, from_suite: bool = False):
+    def __init__(self, name: str, type: str, path: Path, label: str = None,
+        from_suite: bool = False):
+
         self.name = name
         self.type = type
         self.label = label
@@ -116,7 +118,8 @@ class TestConfigResolver:
         # Raw loaded test suites
         self._suites: Dict[Dict] = {}
 
-    def _get_config_dirname(self, cfg_type: str, use_suites_dir: bool = False) -> str:
+    @staticmethod
+    def _get_config_dirname(cfg_type: str, use_suites_dir: bool = False) -> str:
         """Returns the canonical config directory name for a given config type."""
 
         dirname = cfg_type.lower()
@@ -129,7 +132,8 @@ class TestConfigResolver:
 
         return dirname
 
-    def _get_config_fname(self, cfg_type: str) -> str:
+    @staticmethod
+    def _get_config_fname(cfg_type: str) -> str:
         """Given a config type, returns the name of the file in the
         suites directory corresponding to that type."""
 
@@ -171,7 +175,8 @@ class TestConfigResolver:
 
         return res
 
-    def _config_path_from_suite(self, suite_name: str, conf_type: str) -> Tuple[str, Optional[Path]]:
+    def _config_path_from_suite(self, suite_name: str,
+                                conf_type: str) -> Tuple[str, Optional[Path]]:
         """Given a suite name, return the path to the config file of the specified
         type, if one exists. If the file does not exist in any known suites directory,
         returns None."""
@@ -180,7 +185,7 @@ class TestConfigResolver:
         labels = list(self.config_labels)
 
         cfg_fname = self._get_config_fname(conf_type)
-    
+
         if conf_type == "suite":
             paths.extend(listmap(append_path(f"{suite_name}.yaml"), self.suites_dirs))
             labels *= 2
@@ -205,7 +210,7 @@ class TestConfigResolver:
         :return: A tuple of the path to that config, if it exists, and a boolean
             indicating whether it was found in the suites directory (True) or not (False).
         """
-        
+
         cfg_path = None
 
         if suite_name is not None:
@@ -465,7 +470,7 @@ class TestConfigResolver:
                     raw_tests.append(raw_test)
 
                 ready_to_resolve.extend(permutations)
-            
+
             # Now resolve all the string syntax and variables those tests at once.
             new_resolved_tests = []
             for ptest in self._resolve_escapes(ready_to_resolve):
@@ -606,8 +611,9 @@ class TestConfigResolver:
             resolved_tests = remaining
 
         return multiplied_tests
-    
-    def _safe_load_config(self, cfg: ConfigInfo, loader: yc.YamlConfigLoader) -> TestConfig:
+
+    @staticmethod
+    def _safe_load_config(cfg: ConfigInfo, loader: yc.YamlConfigLoader) -> TestConfig:
         """Given a path to a config, load the config, and raise an appropriate
         error if it can't be loaded"""
 
@@ -639,7 +645,8 @@ class TestConfigResolver:
 
         return raw_cfg
 
-    def _load_raw_config(self, cfg_info: ConfigInfo, loader: yc.YamlConfigLoader, optional: bool = False) -> Optional[TestConfig]:
+    def _load_raw_config(self, cfg_info: ConfigInfo, loader: yc.YamlConfigLoader,
+                         optional: bool = False) -> Optional[TestConfig]:
         """Given a path to a config file and a loader, attempt to load the config, handle errors
         appropriately."""
 
@@ -663,7 +670,7 @@ class TestConfigResolver:
 
         raw_cfg = self._safe_load_config(cfg_info, loader)
 
-        if cfg_info.from_suite and cfg_info.type is not "suite":
+        if cfg_info.from_suite and cfg_info.type != "suite":
             raw_cfg = raw_cfg.get(cfg_info.name)
 
         if raw_cfg is None:
@@ -1012,7 +1019,7 @@ class TestConfigResolver:
 
         for mode in modes:
             mode_cfg_path = None
-            
+
             if suite_name is not None:
                 label, mode_cfg_path = self._config_path_from_suite(suite_name, "mode")
             if mode_cfg_path is None:
@@ -1024,7 +1031,7 @@ class TestConfigResolver:
                 loader = self._suite_loader
 
             cfg_info = ConfigInfo(mode, "mode", mode_cfg_path, label, from_suite)
-                
+
             raw_mode_cfg = self._load_raw_config(cfg_info, loader)
 
             try:
