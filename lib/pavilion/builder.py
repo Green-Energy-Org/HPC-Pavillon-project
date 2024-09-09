@@ -962,7 +962,7 @@ class TestBuilder:
         return file_hash
 
     @classmethod
-    def _hash_io(cls, contents: TextIO) -> bytes:
+    def _hash_io(cls, contents: IO) -> bytes:
         """Hash the given file in IOString format.
         :param IOString contents: file name (as relative path to build
                                   directory) and file contents to hash."""
@@ -992,10 +992,16 @@ class TestBuilder:
         hash_obj = hashlib.sha256()
 
         for file in files:
-            with open(file, 'w') as fin:
+            if file.is_dir():
+            # This has the effect of flattening directories,
+            # thus ignoring the structure of the directory.
+            # This might not be what we want.
+                continue
+
+            with open(file, 'rb') as fin:
                 hash_obj.update(cls._hash_io(fin))
 
-        return hash_obj.hexdigest()
+        return hash_obj.hexdigest().encode("utf-8")
 
     @staticmethod
     def _isurl(url):
