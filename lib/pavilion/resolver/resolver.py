@@ -1015,8 +1015,6 @@ class TestConfigResolver:
         :param modes: A list of mode names.
         """
 
-        # import pdb; pdb.set_trace()
-
         for mode in modes:
             mode_cfg_path = None
 
