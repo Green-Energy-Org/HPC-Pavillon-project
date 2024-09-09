@@ -29,6 +29,7 @@ from pavilion.test_config import parse_timeout
 from pavilion.test_config.spack import SpackEnvConfig
 from pavilion.micro import set_default
 
+CONFIG_FNAMES = ("suite.yaml", "hosts.yaml", "modes.yaml", "os.yaml")
 
 class TestBuilder:
     """Manages a test build and their organization.
@@ -220,7 +221,7 @@ class TestBuilder:
             if src_path.is_file():
                 hash_obj.update(self._hash_file(src_path))
             elif src_path.is_dir():
-                hash_obj.update(self._hash_dir(src_path))
+                hash_obj.update(self._hash_dir(src_path, exclude=CONFIG_FNAMES))
             else:
                 raise TestBuilderError(
                     "Invalid src location {}."
@@ -243,7 +244,7 @@ class TestBuilder:
                 hash_obj.update(self._hash_file(full_path))
             elif full_path.is_dir():
                 self._date_dir(full_path)
-                hash_obj.update(self._hash_dir(full_path))
+                hash_obj.update(self._hash_dir(full_path, exclude=CONFIG_NAMES))
             else:
                 raise TestBuilderError(
                     "Extra file '{}' must be a regular file or directory."
@@ -987,7 +988,7 @@ class TestBuilder:
 
         # Order is indeterminate, so sort them
         files = sorted(path.rglob('*'))
-        files = filter(lambda x: x.suffix not in exclude, files)
+        files = filter(lambda x: x.name not in exclude, files)
 
         hash_obj = hashlib.sha256()
 
