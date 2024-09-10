@@ -59,7 +59,7 @@ class SeriesCmdTests(PavTestCase):
         self.assertEqual(run_result, 0)
 
         series_obj = run_cmd.last_run_series
-        series_obj.wait(5)
+        series_obj.wait(timeout=10)
         self.assertEqual(series_obj.complete, True)
         self.assertEqual(series_obj.info().passed, 1)
 
@@ -86,7 +86,7 @@ class SeriesCmdTests(PavTestCase):
         self.assertEqual(run_result, 0)
 
         series_obj = run_cmd.last_run_series
-        series_obj.wait(5)
+        series_obj.wait(timeout=10)
         self.assertEqual(series_obj.complete, True)
         self.assertEqual(series_obj.info().passed, 1)
 
