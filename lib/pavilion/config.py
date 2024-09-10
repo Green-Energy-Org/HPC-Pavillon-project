@@ -17,7 +17,8 @@ from typing import List, Union, Dict, NewType, Iterator
 import yaml_config as yc
 from pavilion import output
 from pavilion import errors
-from pavilion.micro import first, flatten
+from pavilion.micro import first, flatten, remove_none
+from pavilion.path_utils import Pathlike, append_to_path, append_suffix, exists, path_product
 
 # Figure out what directories we'll search for the base configuration.
 PAV_CONFIG_SEARCH_DIRS = [Path('./').resolve()]
@@ -184,8 +185,6 @@ class PavConfigDict:
 
         return adict
 
-Pathlike = Union[str, Path]
-
 class PavConfig(PavConfigDict):
     """Define types and attributes for Pavilion config options."""
 
@@ -221,14 +220,14 @@ class PavConfig(PavConfigDict):
         super().__init__(set_attrs)
 
     @property
-    def cfg_paths(self) -> Iterator[Path]:
+    def config_paths(self) -> Iterator[Path]:
         """Return an iterator of paths to all config directories"""
         return (Path(cfg['path']) for cfg in self.configs.values())
 
     @property
     def suites_dirs(self) -> Iterator[Path]:
         """Return an iterator of paths to all suites directories"""
-        return (path / 'suites' for path in self.cfg_paths)
+        return (path / 'suites' for path in self.config_paths)
 
     @property
     def suite_paths(self) -> Iterator[Path]:
@@ -265,21 +264,12 @@ class PavConfig(PavConfigDict):
             else:
                 return None
 
-        sub_dirs = list(sub_dirs)
-
-        path_comps = product(self.cfg_paths, sub_dirs, [file])
-
-        def make_path(path: Path, subdir: Pathlike, file: Path) -> Path:
-            if subdir is None:
-                return path / file
-
-            return path / subdir / file
-
-        paths = starmap(make_path, path_comps)
+        sub_dirs = remove_none(list(sub_dirs))
+        paths = path_product(self.config_dirs, sub_dirs)
+        files = map(append_to_path(file), paths)
 
         # Return the first path to the file that exists (or None)
-        return first(lambda x: x.exists(), paths)
-
+        return first(exists, files)
 
 class ExPathElem(yc.PathElem):
     """Expand environment variables in the path."""

@@ -38,7 +38,7 @@ from pavilion.test_config.file_format import (TEST_NAME_RE,
 from pavilion.test_config.file_format import TestConfigLoader, TestSuiteLoader
 from pavilion.utils import union_dictionary
 from pavilion.micro import first, listmap
-from pavilion.path_utils import append_path
+from pavilion.path_utils import append_to_path
 from yaml_config import RequiredError, YamlConfigLoader
 
 from .proto_test import RawProtoTest, ProtoTest
@@ -152,7 +152,7 @@ class TestConfigResolver:
     @property
     def suites_dirs(self) -> Iterator[Path]:
         """Return an iterator over all suites directories."""
-        return map(append_path("suites"), self.config_paths)
+        return map(append_to_path("suites"), self.config_paths)
 
     @property
     def config_labels(self) -> Iterator[str]:
@@ -165,7 +165,7 @@ class TestConfigResolver:
         return None."""
 
         cfg_dir = self._get_config_dirname(cfg_type)
-        paths = map(append_path(f"{cfg_dir}/{cfg_name}.yaml"), self.config_paths)
+        paths = map(append_to_path(f"{cfg_dir}/{cfg_name}.yaml"), self.config_paths)
         pairs = zip(self.config_labels, paths)
 
         res = first(lambda x: x[1].exists(), pairs)
@@ -187,10 +187,10 @@ class TestConfigResolver:
         cfg_fname = self._get_config_fname(conf_type)
 
         if conf_type == "suite":
-            paths.extend(listmap(append_path(f"{suite_name}.yaml"), self.suites_dirs))
+            paths.extend(listmap(append_to_path(f"{suite_name}.yaml"), self.suites_dirs))
             labels *= 2
 
-        paths.extend(listmap(append_path(f"{suite_name}/{cfg_fname}"), self.suites_dirs))
+        paths.extend(listmap(append_to_path(f"{suite_name}/{cfg_fname}"), self.suites_dirs))
 
         pairs = zip(labels, paths)
 

@@ -37,7 +37,7 @@ def replace(lst: Iterable[T], old: T, new: T) -> Iterator[T]:
 
 def remove_none(lst: Iterable[T]) -> Iterator[T]:
     """Remove all instances of None from the iterable."""
-    return filter(lambda x: x is not None, lst)
+    return remove_all(lst, None)
 
 def first(pred: Callable[[T], bool], lst: Iterable[T]) -> Optional[T]:
     """Return the first item of the list that satisfies the given
