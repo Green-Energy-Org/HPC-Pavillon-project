@@ -673,7 +673,7 @@ class TestConfigResolver:
         if cfg_info.from_suite and cfg_info.type != "suite":
             raw_cfg = raw_cfg.get(cfg_info.name)
 
-        if raw_cfg is None:
+        if raw_cfg is None and not optional:
             raise TestConfigError(
                 f"Could not find {cfg_info.type} config with name {cfg_info.name}"
                 f" in file {cfg_info.path}.")

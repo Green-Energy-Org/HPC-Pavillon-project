@@ -133,7 +133,7 @@ class SuitesTests(PavTestCase):
         self.assertEqual(ret, 0)
 
         last_test = run_cmd.last_tests[0]
-        hash_a = last_test.builder().build_hash
+        hash_a = last_test.builder.build_hash
 
         arg_parser = arguments.get_parser()
         args = arg_parser.parse_args([
@@ -147,6 +147,6 @@ class SuitesTests(PavTestCase):
         self.assertEqual(ret, 0)
 
         last_test = run_cmd.last_tests[0]
-        hash_b = last_test.builder().build_hash
+        hash_b = last_test.builder.build_hash
 
         self.assertEqual(hash_a, hash_b)
