@@ -867,9 +867,13 @@ class TestConfigResolver:
             working_dir = self.pav_cfg['configs'][cfg_info.label]['working_dir']
             test_cfg['working_dir'] = working_dir.as_posix()
             test_cfg['suite'] = suite_name
-            test_cfg['suite_path'] = cfg_info.path.as_posix()
             test_cfg['host'] = self._host
             test_cfg['os'] = self._os
+
+            if cfg_info.from_suite:
+                test_cfg['suite_path'] = cfg_info.path.as_posix().parent
+            else:
+                test_cfg['suite_path'] = cfg_info.path.as_posix()
 
         self._suites[suite_name] = suite_tests
 
