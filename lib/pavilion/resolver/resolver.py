@@ -871,7 +871,7 @@ class TestConfigResolver:
             test_cfg['os'] = self._os
 
             if cfg_info.from_suite:
-                test_cfg['suite_path'] = cfg_info.path.as_posix().parent
+                test_cfg['suite_path'] = cfg_info.path.parent.as_posix()
             else:
                 test_cfg['suite_path'] = cfg_info.path.as_posix()
 

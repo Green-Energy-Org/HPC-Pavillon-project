@@ -137,14 +137,11 @@ class TestBuilder:
                                        .format(dest), err)
 
     @property
-    def suite_path(self) -> Optional[Path]:
-        spath = self._config.get('suite_path')
-        
-        if spath == "<no_suite>":
-            return None
+    def suite_subdir(self) -> Optional[Path]:
+        sname = self._config.get('suite_name')
 
-        if spath is not None:
-            return Path(spath)
+        if sname is not None:
+            return Path(f"suites/{sname}/")
 
     def exists(self):
         """Return True if the given build exists."""
@@ -235,7 +232,8 @@ class TestBuilder:
         # Hash extra files.
         for extra_file in self._config.get('extra_files', []):
             extra_file = Path(extra_file)
-            full_path = self._pav_cfg.find_file(extra_file, remove_none([self.suite_path, Path('test_src')]))
+            sub_dirs = [self.suite_subdir, Path('test_src')]
+            full_path = self._pav_cfg.find_file(extra_file, sub_dirs)
 
             if full_path is None:
                 raise TestBuilderError(
@@ -329,7 +327,8 @@ class TestBuilder:
                 "The source path must be a valid unix path, either relative "
                 "or absolute, got '{}'".format(src_path), err)
 
-        found_src_path = self._pav_cfg.find_file(src_path, remove_none([self.suite_path, Path('test_src')]))
+        sub_dirs = [self.suite_subdir, Path('test_src')]
+        found_src_path = self._pav_cfg.find_file(src_path, sub_dirs)
 
         src_url = self._config.get('source_url')
         src_download = self._config.get('source_download')
@@ -682,7 +681,8 @@ class TestBuilder:
         if raw_src_path is None:
             src_path = None
         else:
-            src_path = self._pav_cfg.find_file(raw_src_path, remove_none([self.suite_path, Path('test_src')]))
+            sub_dirs = [self.suite_subdir, Path('test_src')]
+            src_path = self._pav_cfg.find_file(raw_src_path, sub_dirs)
             if src_path is None:
                 raise TestBuilderError("Could not find source file '{}'"
                                        .format(raw_src_path))
@@ -789,7 +789,8 @@ class TestBuilder:
         # Now we just need to copy over all the extra files.
         for extra in self._config.get('extra_files', []):
             extra = Path(extra)
-            path = self._pav_cfg.find_file(extra, remove_none([self.suite_path, Path('test_src')]))
+            sub_dirs = [self.suite_subdir, Path('test_src')]
+            path = self._pav_cfg.find_file(extra, sub_dirs)
             final_dest = dest / path.name
             try:
                 if path.is_dir():
