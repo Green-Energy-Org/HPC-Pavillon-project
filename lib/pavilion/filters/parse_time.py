@@ -144,9 +144,13 @@ def normalize(unit: str) -> str:
     return unit
 
 
-def safe_update(date: datetime,
-                year: int = None,
-                month: int = None, day: int = None) -> datetime:
+def safe_update(date: datetime, year: int = None, month: int = None, day: int = None) -> datetime:
+    """Update the datetime object with the given year, month, and day, ensuring that the final
+    day is valid for the month and year, returning the modified datetime object. For instance, we
+    want to guard against February 30th. This function is necessary because datetime.timedelta
+    can't handle variable-size units of time (i.e. months and years).
+    """
+
     if year is None:
         year = date.year
     if month is None:
