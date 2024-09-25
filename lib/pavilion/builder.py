@@ -204,6 +204,8 @@ class TestBuilder:
         #  - All of the build's 'extra_files'
         #  - All files needed to be created at build time 'create_files'
 
+        self.status.set(STATES.INFO, "Creating build hash.")
+
         hash_obj = hashlib.sha256()
 
         # Update the hash with the contents of the build script.
@@ -316,6 +318,7 @@ class TestBuilder:
         """
 
         src_path = self._config.get('source_path')
+
         if src_path is None:
             # There is no source to do anything with.
             return None
@@ -980,16 +983,20 @@ class TestBuilder:
 
     @classmethod
     def _hash_dir(cls, path: Path, exclude: List[str] = None) -> str:
-        """Recursively hash the files in the given directory, excluding
-        files with the given suffixes.
+        """Recursively hash the files in the given directory, optionally excluding files with
+        the given names.
 
-        We might need to modify this to handle circular symlinks.
+        Returns the hexadecimal hash digest of all files in the directory, as a UTF-8 string.
         """
 
         exclude = set_default(exclude, [])
 
-        # Order is indeterminate, so sort them
-        files = sorted(path.rglob('*'))
+        try:
+            # Order is indeterminate, so sort the files
+            files = sorted(path.rglob('*'))
+        except OSError:
+            raise TestBuilderError(f"Unable to hash directory: {path}. Possible circular symlink.")
+
         files = filter(lambda x: x.name not in exclude, files)
 
         hash_obj = hashlib.sha256()

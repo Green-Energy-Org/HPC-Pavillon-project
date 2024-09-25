@@ -18,7 +18,7 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import List, IO, Dict, Tuple, NewType, Union, Any, Iterator, TextIO, Optional
+from typing import List, IO, Dict, Tuple, NewType, Union, Any, Iterator, TextIO, Optional, Iterable
 
 import similarity
 import yc_yaml
@@ -38,7 +38,7 @@ from pavilion.test_config.file_format import (TEST_NAME_RE,
 from pavilion.test_config.file_format import TestConfigLoader, TestSuiteLoader
 from pavilion.utils import union_dictionary
 from pavilion.micro import first, listmap
-from pavilion.path_utils import append_to_path
+from pavilion.path_utils import append_to_path, exists
 from yaml_config import RequiredError, YamlConfigLoader
 
 from .proto_test import RawProtoTest, ProtoTest
@@ -147,12 +147,12 @@ class TestConfigResolver:
     @property
     def config_paths(self) -> Iterator[Path]:
         """Return an iterator over all config paths."""
-        return map(lambda x: x["path"], self.pav_cfg.configs.values())
+        return self.pav_cfg.config_paths
 
     @property
     def suites_dirs(self) -> Iterator[Path]:
         """Return an iterator over all suites directories."""
-        return map(append_to_path("suites"), self.config_paths)
+        return self.pav_cfg.suites_dirs
 
     @property
     def config_labels(self) -> Iterator[str]:
@@ -244,6 +244,16 @@ class TestConfigResolver:
 
         return similarity.find_matches(conf_name, names)
 
+    
+    @staticmethod
+    def _make_suites_dict(self, suite_dirs: Iterable[Path]) -> Dict[str, Path]:
+        """Construct a dictionary mapping suite names to their respective suite.yaml
+        files."""
+
+        pairs = ((sdir.stem, sdir / "suite.yaml") for sdir in suite_dirs)
+
+        return dict(pairs)
+        
 
     def find_all_tests(self):
         """Find all the tests within known config directories.
@@ -267,67 +277,55 @@ class TestConfigResolver:
 
         suites = {}
 
-        for label, config in self.pav_cfg.configs.items():
-            path = config['path']/'tests'
+        # TODO: Figure out how to do this and get the labels
+        for label, name, path in self.pav_cfg.suite_info:
+            if name not in suites:
+                suites[suite_name] = {
+                    'path': path,
+                    'label': label,
+                    'err': '',
+                    'tests': {},
+                    'supersedes': [],
+                }
+            else:
+                suites[name]['supersedes'].append(path)
 
-            if not (path.exists() and path.is_dir()):
+            # It's ok if the tests aren't completely validated. They
+            # may have been written to require a real host/mode file.
+            with path.open('r') as suite_file:
+                try:
+                    suite_cfg = self._suite_loader.load(suite_file, partial=True)
+                except (TypeError,
+                        KeyError,
+                        ValueError,
+                        yc_yaml.YAMLError) as err:
+                    suites[name]['err'] = err
+                    continue
+
+            base = self._loader.load_empty()
+
+            try:
+                suite_cfgs = self.resolve_inheritance(
+                    suite_cfg=suite_cfg,
+                    suite_path=path)
+            except Exception as err:  # pylint: disable=W0703
+                suites[name]['err'] = err
                 continue
 
-            for file in os.listdir(path.as_posix()):
+            def default(val, dval):
+                """Return the dval if val is None."""
 
-                file = path/file
-                if file.suffix != '.yaml' or not file.is_file():
-                    continue
+                return dval if val is None else val
 
-                suite_name = file.stem
-
-                if suite_name not in suites:
-                    suites[suite_name] = {
-                        'path': file,
-                        'label': label,
-                        'err': '',
-                        'tests': {},
-                        'supersedes': [],
-                    }
-                else:
-                    suites[suite_name]['supersedes'].append(file)
-
-                # It's ok if the tests aren't completely validated. They
-                # may have been written to require a real host/mode file.
-                with file.open('r') as suite_file:
-                    try:
-                        suite_cfg = self._suite_loader.load(suite_file, partial=True)
-                    except (TypeError,
-                            KeyError,
-                            ValueError,
-                            yc_yaml.YAMLError) as err:
-                        suites[suite_name]['err'] = err
-                        continue
-
-                base = self._loader.load_empty()
-
-                try:
-                    suite_cfgs = self.resolve_inheritance(
-                        suite_cfg=suite_cfg,
-                        suite_path=file)
-                except Exception as err:  # pylint: disable=W0703
-                    suites[suite_name]['err'] = err
-                    continue
-
-                def default(val, dval):
-                    """Return the dval if val is None."""
-
-                    return dval if val is None else val
-
-                for test_name, conf in suite_cfgs.items():
-                    suites[suite_name]['tests'][test_name] = {
-                        'conf': conf,
-                        'maintainer': default(
-                            conf['maintainer']['name'], ''),
-                        'email': default(conf['maintainer']['email'], ''),
-                        'summary': default(conf.get('summary', ''), ''),
-                        'doc': default(conf.get('doc', ''), ''),
-                    }
+            for test_name, conf in suite_cfgs.items():
+                suites[name]['tests'][test_name] = {
+                    'conf': conf,
+                    'maintainer': default(
+                        conf['maintainer']['name'], ''),
+                    'email': default(conf['maintainer']['email'], ''),
+                    'summary': default(conf.get('summary', ''), ''),
+                    'doc': default(conf.get('doc', ''), ''),
+                }
         return suites
 
     def find_all_configs(self, conf_type):
@@ -735,9 +733,9 @@ class TestConfigResolver:
 
             # Apply modes.
             try:
-                test_cfg = self.apply_modes(test_cfg, modes, request.suite)
-                test_cfg = self.apply_host(test_cfg, self._host, request.suite)
                 test_cfg = self.apply_os(test_cfg, self._os, request.suite)
+                test_cfg = self.apply_host(test_cfg, self._host, request.suite)
+                test_cfg = self.apply_modes(test_cfg, modes, request.suite)
             except TestConfigError as err:
                 err.request = request
                 self.errors.append(err)

@@ -150,3 +150,17 @@ class SuitesTests(PavTestCase):
         hash_b = last_test.builder.build_hash
 
         self.assertEqual(hash_a, hash_b)
+
+    def test_suite_with_source(self):
+        """Test that Pavilion correctly finds and uses source files in the suites directory."""
+
+        arg_parser = arguments.get_parser()
+        args = arg_parser.parse_args([
+            'run',
+            'suite_with_source'
+        ])
+
+        run_cmd = commands.get_command(args.command_name)
+        ret = run_cmd.run(self.pav_cfg, args)
+
+        self.assertEqual(ret, 0)

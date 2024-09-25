@@ -12,7 +12,7 @@ import sys
 from collections import OrderedDict
 from pathlib import Path
 from itertools import product, starmap
-from typing import List, Union, Dict, NewType, Iterator
+from typing import List, Union, Dict, NewType, Iterator, Tuple
 
 import yaml_config as yc
 from pavilion import output
@@ -225,6 +225,11 @@ class PavConfig(PavConfigDict):
         return (Path(cfg['path']) for cfg in self.configs.values())
 
     @property
+    def tests_dirs(self) -> Iterator[Path]:
+        """Return an iterator of paths to all test directories."""
+        return (path / 'tests' for path in self.config_paths)
+
+    @property
     def suites_dirs(self) -> Iterator[Path]:
         """Return an iterator of paths to all suites directories"""
         return (path / 'suites' for path in self.config_paths)
@@ -244,6 +249,34 @@ class PavConfig(PavConfigDict):
         test_files = map(is_suite, self.suite_paths)
 
         return map(lambda x: x.stem, self.suite_paths)
+
+    @property
+    def suite_info(self) -> List[Tuple[str, str, Path]]:
+        """Get the label, name, and path for every suite the config
+        knows about."""
+
+        suites = []
+
+        for label, cfg in self.configs.values():
+            tests_dir = Path(cfg['path']) / 'tests'
+            suites_dir = Path(cfg['path']) / 'suites'
+
+            if tests_dir.exists():
+                tests = [file for file in test_dir.iterdir() if (file.suffix.lower() == ".yaml")]
+                names = [test.name for test in tests]
+                labels = [label] * len(tests)
+
+                suites.extend(zip(labels, names, tests))
+
+            if suites_dir.exists():
+                suites = [sdir / "suite.yaml" in suites_dir.iterdir()]
+                suites = list(filter(exists, suites))
+                names = [suite.parent.name for suite in suites]
+                labels = [label] * len(suites)
+
+                suites.extend(zip(labels, names, suites))
+
+        return suites
 
     def find_file(self, file: Pathlike, sub_dirs: Union[List[Pathlike], Pathlike] = None) \
             -> Union[Path, None]:
