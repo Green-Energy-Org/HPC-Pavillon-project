@@ -244,17 +244,6 @@ class TestConfigResolver:
 
         return similarity.find_matches(conf_name, names)
 
-    
-    @staticmethod
-    def _make_suites_dict(self, suite_dirs: Iterable[Path]) -> Dict[str, Path]:
-        """Construct a dictionary mapping suite names to their respective suite.yaml
-        files."""
-
-        pairs = ((sdir.stem, sdir / "suite.yaml") for sdir in suite_dirs)
-
-        return dict(pairs)
-        
-
     def find_all_tests(self):
         """Find all the tests within known config directories.
 
@@ -280,7 +269,7 @@ class TestConfigResolver:
         # TODO: Figure out how to do this and get the labels
         for label, name, path in self.pav_cfg.suite_info:
             if name not in suites:
-                suites[suite_name] = {
+                suites[name] = {
                     'path': path,
                     'label': label,
                     'err': '',
@@ -328,7 +317,7 @@ class TestConfigResolver:
                 }
         return suites
 
-    def find_all_configs(self, conf_type):
+    def find_all_configs(self, conf_type: str):
         """ Find all configs (host/modes) within known config directories.
 
     :return: Returns a dictionary of suite names to an info dict.

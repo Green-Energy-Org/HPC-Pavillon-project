@@ -143,6 +143,9 @@ class TestBuilder:
         if sname is not None:
             return Path(f"suites/{sname}/")
 
+        self.status.set(STATES.WARNING,
+                        "Unable to determine name of test suite. Suite directory is unknown.")
+
     def exists(self):
         """Return True if the given build exists."""
         return self.path.exists()
@@ -317,11 +320,12 @@ class TestBuilder:
         :returns: src_path, extra_files
         """
 
+        self.status.set(STATES.INFO, "Updating source.")
+
         src_path = self._config.get('source_path')
 
         if src_path is None:
-            # There is no source to do anything with.
-            return None
+            return
 
         try:
             src_path = Path(src_path)
@@ -681,11 +685,14 @@ class TestBuilder:
         os.umask(umask)
 
         raw_src_path = self._config.get('source_path')
+        raw_src_path = set_default(raw_source_path, self.suite_subdir)
+
         if raw_src_path is None:
             src_path = None
         else:
-            sub_dirs = [self.suite_subdir, Path('test_src')]
+            sub_dirs = [Path('test_src')]
             src_path = self._pav_cfg.find_file(raw_src_path, sub_dirs)
+
             if src_path is None:
                 raise TestBuilderError("Could not find source file '{}'"
                                        .format(raw_src_path))

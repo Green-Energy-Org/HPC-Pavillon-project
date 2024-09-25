@@ -262,7 +262,7 @@ class PavConfig(PavConfigDict):
             suites_dir = Path(cfg['path']) / 'suites'
 
             if tests_dir.exists():
-                tests = [file for file in test_dir.iterdir() if (file.suffix.lower() == ".yaml")]
+                tests = [file for file in tests_dir.iterdir() if (file.suffix.lower() == ".yaml")]
                 names = [test.name for test in tests]
                 labels = [label] * len(tests)
 

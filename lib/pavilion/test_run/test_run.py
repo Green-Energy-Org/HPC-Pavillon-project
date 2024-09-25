@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import TextIO, Union, Dict
+from typing import TextIO, Union, Dict, Optional
 import yc_yaml as yaml
 
 from pavilion.config import PavConfig
@@ -153,8 +153,8 @@ class TestRun(TestAttributes):
             self.rebuild = rebuild
             self.cfg_label = config.get('cfg_label', self.NO_LABEL)
             suite_path = config.get('suite_path')
-            if suite_path == '<no_suite>' or suite_path is None:
-                self.suite_path = Path('..')
+            if suite_path == '<no_suite>':
+                self.suite_path = None
             else:
                 self.suite_path = Path(suite_path)
             self.user = utils.get_login()
@@ -253,9 +253,10 @@ class TestRun(TestAttributes):
         return not all(map(is_empty, sections))
 
     @property
-    def suite_name(self) -> str:
+    def suite_name(self) -> Optional[str]:
         """Return the name of the suite associated with the test."""
-        return self.suite_path.stem
+        if self.suite_path is not None:
+            return self.suite_path.stem
 
     @property
     def id_pair(self) -> ID_Pair:
@@ -342,7 +343,7 @@ class TestRun(TestAttributes):
 
         spack_config = (self.config.get('spack_config', {}) if self.spack_enabled()
                         else None)
-        if self.suite_path != Path('..') and self.suite_path is not None:
+        if self.suite_path is not None:
             download_dest = self.suite_path
 
             # Check the deprecated directory
@@ -353,10 +354,15 @@ class TestRun(TestAttributes):
 
         templates = self._create_build_templates()
 
+        config = self.config.get('build', {})
+        
+        if self.suite_name is not None:
+            config['suite_name'] = self.suite_name
+
         try:
             test_builder = builder.TestBuilder(
                 pav_cfg=self._pav_cfg,
-                config=self.config.get('build', {}),
+                config=config,
                 script=self.build_script_path,
                 spack_config=spack_config,
                 status=self.status,
