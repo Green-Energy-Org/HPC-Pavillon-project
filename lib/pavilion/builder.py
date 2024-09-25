@@ -672,7 +672,7 @@ class TestBuilder:
         'x-lzma',
     )
 
-    def _setup_build_dir(self, dest, tracker: BuildTracker):
+    def _setup_build_dir(self, dest: Path, tracker: BuildTracker) -> None:
         """Setup the build directory, by extracting or copying the source
             and any extra files.
         :param dest: Path to the intended build directory. This is generally a
@@ -684,32 +684,36 @@ class TestBuilder:
         umask = os.umask(0)
         os.umask(umask)
 
+        src_path = None
         raw_src_path = self._config.get('source_path')
-        raw_src_path = set_default(raw_source_path, self.suite_subdir)
 
-        if raw_src_path is None:
-            src_path = None
-        else:
+        if raw_src_path is not None:
             sub_dirs = [Path('test_src')]
             src_path = self._pav_cfg.find_file(raw_src_path, sub_dirs)
 
+            # Only raise an error if a path that is explicitly identified is missing
             if src_path is None:
                 raise TestBuilderError("Could not find source file '{}'"
                                        .format(raw_src_path))
-
-            # Resolve any softlinks to get the real file.
-            src_path = src_path.resolve()
+        else:
+            # Default to the suite directory, which may or may not exist
+            # If it doesn't exist, we should just continue without raising an error.
+            if self.suite_subdir is not None:
+                src_path = self._pav_cfg.find_file(self.suite_subdir)
 
         umask = int(self._pav_cfg['umask'], 8)
 
         # All of the file extraction functions return an error message on failure, None on success.
         extract_error = None
 
+        if src_path is not None:
+            # Resolve any softlinks to get the real file.
+            src_path = src_path.resolve()
+
         if src_path is None:
             # If there is no source archive or data, just make the build
             # directory.
             dest.mkdir()
-
         elif src_path.is_dir():
             # Recursively copy the src directory to the build directory.
             tracker.update(
@@ -723,7 +727,9 @@ class TestBuilder:
                 dest.as_posix(),
                 copy_function=shutil.copyfile,
                 copystat=utils.make_umask_filtered_copystat(umask),
-                symlinks=True)
+                symlinks=True,
+                ignore=shutil.ignore_patterns("*.yaml")
+                )
 
         elif src_path.is_file():
             category, subtype = utils.get_mime_type(src_path)

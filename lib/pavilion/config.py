@@ -17,7 +17,7 @@ from typing import List, Union, Dict, NewType, Iterator, Tuple
 import yaml_config as yc
 from pavilion import output
 from pavilion import errors
-from pavilion.micro import first, flatten, remove_none
+from pavilion.micro import first, flatten, remove_none, set_default
 from pavilion.path_utils import Pathlike, append_to_path, append_suffix, exists, path_product
 
 # Figure out what directories we'll search for the base configuration.
@@ -255,28 +255,28 @@ class PavConfig(PavConfigDict):
         """Get the label, name, and path for every suite the config
         knows about."""
 
-        suites = []
+        suite_infos = []
 
-        for label, cfg in self.configs.values():
+        for label, cfg in self.configs.items():
             tests_dir = Path(cfg['path']) / 'tests'
             suites_dir = Path(cfg['path']) / 'suites'
 
             if tests_dir.exists():
-                tests = [file for file in tests_dir.iterdir() if (file.suffix.lower() == ".yaml")]
+                tests = [file for file in tests_dir.iterdir() if file.suffix.lower() == ".yaml"]
                 names = [test.name for test in tests]
                 labels = [label] * len(tests)
 
-                suites.extend(zip(labels, names, tests))
+                suite_infos.extend(zip(labels, names, tests))
 
             if suites_dir.exists():
-                suites = [sdir / "suite.yaml" in suites_dir.iterdir()]
+                suites = [sdir / "suite.yaml" for sdir in suites_dir.iterdir()]
                 suites = list(filter(exists, suites))
                 names = [suite.parent.name for suite in suites]
                 labels = [label] * len(suites)
 
-                suites.extend(zip(labels, names, suites))
+                suite_infos.extend(zip(labels, names, suites))
 
-        return suites
+        return suite_infos
 
     def find_file(self, file: Pathlike, sub_dirs: Union[List[Pathlike], Pathlike] = None) \
             -> Union[Path, None]:
@@ -297,6 +297,7 @@ class PavConfig(PavConfigDict):
             else:
                 return None
 
+        sub_dirs = set_default(sub_dirs, [])
         sub_dirs = remove_none(list(sub_dirs))
         paths = path_product(self.config_paths, sub_dirs)
         files = map(append_to_path(file), paths)

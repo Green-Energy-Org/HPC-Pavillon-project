@@ -153,10 +153,12 @@ class TestRun(TestAttributes):
             self.rebuild = rebuild
             self.cfg_label = config.get('cfg_label', self.NO_LABEL)
             suite_path = config.get('suite_path')
-            if suite_path == '<no_suite>':
+
+            if suite_path is None or suite_path == '<no_suite>':
                 self.suite_path = None
             else:
                 self.suite_path = Path(suite_path)
+
             self.user = utils.get_login()
             self.uuid = str(uuid.uuid4())
 
@@ -355,7 +357,7 @@ class TestRun(TestAttributes):
         templates = self._create_build_templates()
 
         config = self.config.get('build', {})
-        
+
         if self.suite_name is not None:
             config['suite_name'] = self.suite_name
 

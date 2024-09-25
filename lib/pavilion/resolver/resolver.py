@@ -266,7 +266,6 @@ class TestConfigResolver:
 
         suites = {}
 
-        # TODO: Figure out how to do this and get the labels
         for label, name, path in self.pav_cfg.suite_info:
             if name not in suites:
                 suites[name] = {
