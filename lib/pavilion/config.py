@@ -19,6 +19,7 @@ from pavilion import output
 from pavilion import errors
 from pavilion.micro import first, flatten, remove_none, set_default
 from pavilion.path_utils import Pathlike, append_to_path, append_suffix, exists, path_product
+from pavilion.status_file import STATES
 
 # Figure out what directories we'll search for the base configuration.
 PAV_CONFIG_SEARCH_DIRS = [Path('./').resolve()]
@@ -298,9 +299,14 @@ class PavConfig(PavConfigDict):
                 return None
 
         sub_dirs = set_default(sub_dirs, [])
-        sub_dirs = remove_none(list(sub_dirs))
-        paths = path_product(self.config_paths, sub_dirs)
-        files = map(append_to_path(file), paths)
+        sub_dirs = list(remove_none(list(sub_dirs)))
+
+        if len(sub_dirs) > 0:
+            paths = list(path_product(self.config_paths, sub_dirs))
+        else:
+            paths = list(self.config_paths)
+
+        files = list(map(append_to_path(file), paths))
 
         # Return the first path to the file that exists (or None)
         return first(exists, files)

@@ -681,6 +681,8 @@ class TestBuilder:
         :return: None
         """
 
+        tracker.update(state=STATES.BUILDING, note="Setting up build directory.")
+
         umask = os.umask(0)
         os.umask(umask)
 
@@ -688,6 +690,7 @@ class TestBuilder:
         raw_src_path = self._config.get('source_path')
 
         if raw_src_path is not None:
+            tracker.update(state=STATES.BUILDING, note=f"Looking for source path: {raw_src_path}.")
             sub_dirs = [Path('test_src')]
             src_path = self._pav_cfg.find_file(raw_src_path, sub_dirs)
 
@@ -699,6 +702,8 @@ class TestBuilder:
             # Default to the suite directory, which may or may not exist
             # If it doesn't exist, we should just continue without raising an error.
             if self.suite_subdir is not None:
+                tracker.update(state=STATES.BUILDING,
+                               note=f"No source path given. Defaulting to {self.suite_subdir}.")
                 src_path = self._pav_cfg.find_file(self.suite_subdir)
 
         umask = int(self._pav_cfg['umask'], 8)
@@ -711,6 +716,8 @@ class TestBuilder:
             src_path = src_path.resolve()
 
         if src_path is None:
+            tracker.update(state=STATES.BUILDING,
+                           note=f"No source path found. Creating empty build directory.")
             # If there is no source archive or data, just make the build
             # directory.
             dest.mkdir()
