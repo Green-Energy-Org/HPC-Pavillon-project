@@ -222,13 +222,17 @@ class TestBuilder:
 
         if src_path is not None:
             if src_path.is_file():
+                self.status.set(STATES.INFO, f"Hashing file {src_path}.")
                 hash_obj.update(self._hash_file(src_path))
             elif src_path.is_dir():
+                self.status.set(STATES.INFO, f"Hashing directory {src_path}.")
                 hash_obj.update(self._hash_dir(src_path, exclude=CONFIG_FNAMES))
             else:
                 raise TestBuilderError(
                     "Invalid src location {}."
                     .format(src_path))
+        else:
+            self.status.set(STATES.INFO, "No files to hash.")
 
         # Hash all the given template files.
         for tmpl_src in sorted(self._templates.keys()):
@@ -1015,6 +1019,7 @@ class TestBuilder:
             # Order is indeterminate, so sort the files
             files = sorted(path.rglob('*'))
         except OSError:
+            # This will typically be caught earlier by _date_dir
             raise TestBuilderError(f"Unable to hash directory: {path}. Possible circular symlink.")
 
         files = filter(lambda x: x.name not in exclude, files)
@@ -1054,8 +1059,8 @@ class TestBuilder:
                 dir_stat = path.stat()
             except OSError as err:
                 raise TestBuilderError(
-                    "Could not stat file in test source dir '{}'"
-                    .format(base_path), err)
+                    (f"Could not stat file in test source dir '{base_path}'. "
+                     "Possible circular symlink."), err)
             if dir_stat.st_mtime > latest:
                 latest = dir_stat.st_mtime
 

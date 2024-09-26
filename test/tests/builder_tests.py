@@ -466,7 +466,12 @@ class BuilderTests(PavTestCase):
             'circular_symlinks'
         ])
 
-        build_cmd = commands.get_command(args.command_name)
+        run_cmd = commands.get_command(args.command_name)
 
-        with self.assertRaises(TestBuilderError):
-            build_cmd.run(self.pav_cfg, args)
+        run_cmd.run(self.pav_cfg, args)
+
+        last_series = run_cmd.last_series
+
+        last_series.wait()
+
+        self.assertEqual(last_series.status.current().state, "ERROR")

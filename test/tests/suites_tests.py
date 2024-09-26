@@ -10,7 +10,7 @@ class SuitesTests(PavTestCase):
         plugins.initialize_plugins(self.pav_cfg)
         run_cmd = commands.get_command('run')
         build_cmd = commands.get_command('build')
-        # run_cmd.silence()
+        run_cmd.silence()
 
     def test_suite_run_from_suite_directory(self):
         """Test that Pavilion can find and run a test from
