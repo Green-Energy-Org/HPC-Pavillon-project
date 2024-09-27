@@ -185,7 +185,8 @@ class Flux(SchedulerPluginAdvanced):
     def __init__(self):
         super().__init__("flux", "Schedules tests via the Flux Framework scheduler.")
 
-    def _get_config_elems(self):
+    @staticmethod
+    def _get_config_elems():
         elems = [
             yc.ListElem(
                 name="avail_states",
@@ -237,7 +238,8 @@ class Flux(SchedulerPluginAdvanced):
 
         return elems, validators, defaults
 
-    def _get_alloc_nodes(self, job) -> NodeList:
+    @staticmethod
+    def _get_alloc_nodes(job) -> NodeList:
         """
         Get the list of allocated nodes.
         """
@@ -277,7 +279,8 @@ class Flux(SchedulerPluginAdvanced):
         # Return list of individual nodes in this job allocation
         return nodes
 
-    def _get_raw_node_data(self, sched_config) -> Tuple[Union[List[Any], None], Any]:
+    @staticmethod
+    def _get_raw_node_data(sched_config) -> Tuple[Union[List[Any], None], Any]:
         """
         Get a flux resource list
         """
@@ -290,7 +293,8 @@ class Flux(SchedulerPluginAdvanced):
         return nodelist, extra
 
 
-    def _transform_raw_node_data(self, sched_config, node_data, extra) -> NodeInfo:
+    @staticmethod
+    def _transform_raw_node_data(sched_config, node_data, extra) -> NodeInfo:
         """
         Translate the gathered data into a NodeInfo dict.
         """
@@ -302,14 +306,16 @@ class Flux(SchedulerPluginAdvanced):
         node_info["available"] = node_data in listing.free.nodelist
         return node_info
 
-    def _available(self) -> bool:
+    @staticmethod
+    def _available() -> bool:
         """
         Ensure we can import and talk to flux.
         """
 
         return HAS_FLUX
 
-    def _kickoff(self, pav_cfg, job: Job, sched_config: dict, job_name: str,
+    @staticmethod
+    def _kickoff(pav_cfg, job: Job, sched_config: dict, job_name: str,
                  nodes: Union[NodeList, None] = None,
                  node_range: Union[Tuple[int, int], None] = None) -> JobInfo:
         """
@@ -383,7 +389,8 @@ class Flux(SchedulerPluginAdvanced):
             }
         )
 
-    def _job_status(self, pav_cfg, job_info: JobInfo) -> TestStatusInfo:
+    @staticmethod
+    def _job_status(pav_cfg, job_info: JobInfo) -> TestStatusInfo:
         """
         Get the current status of the flux job for the given test.
         """
@@ -467,7 +474,8 @@ class Flux(SchedulerPluginAdvanced):
             when=time.time(),
         )
 
-    def cancel(self, job_info: JobInfo) -> Union[str, None]:
+    @staticmethod
+    def cancel(job_info: JobInfo) -> Union[str, None]:
         """
         Cancel the job attached to the given test.
         """
