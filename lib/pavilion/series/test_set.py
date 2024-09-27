@@ -733,12 +733,12 @@ class TestSet:
 
         completed_tests = self.mark_completed()
 
-        start = time.monotonic()
+        start = time.time()
 
         while ((wait_for_all and self.started_tests) or
                (not wait_for_all and completed_tests == 0)):
 
-            if time.monotonic() - start > timeout:
+            if time.time() - start > timeout:
                 raise TimeoutError("Timed out waiting for test set to complete.")
 
             time.sleep(wait_period)
