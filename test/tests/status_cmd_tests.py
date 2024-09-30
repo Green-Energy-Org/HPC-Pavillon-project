@@ -289,16 +289,11 @@ class StatusCmdTests(PavTestCase):
         output = out.readlines()[4:]
         statuses = test.status.history()
 
-        def count_statuses(out: List[str]) -> int:
-            num_statuses = 0
+        # Some statuses are split over multiple lines, but only in CI for some reason
+        output = list(filter(lambda x: re.search(STATUS_REGEX, x), output))
 
-            for line in out:
-                if re.search(STATUS_REGEX, line):
-                    num_statuses += 1
-
-            return num_statuses
-
-        self.assertEqual(count_statuses(output), len(statuses), msg='output: {}, statuses: {}'
+        self.assertEqual(len(output), len(statuses), msg='output: {}, statuses: {}'
                          .format(output, statuses))
+
         for i in range(len(output)):
             self.assertTrue(statuses[i].state in output[i])
