@@ -27,7 +27,7 @@ from pavilion.errors import TestRunError, CommandError, TestSeriesError, \
                             PavilionError, TestGroupError
 from pavilion.test_run import TestRun, load_tests, TestAttributes
 from pavilion.types import ID_Pair
-from pavilion.micro import listmap
+from pavilion.micro import listmap, partition, flatten, unique, remove_all
 
 LOGGER = logging.getLogger(__name__)
 

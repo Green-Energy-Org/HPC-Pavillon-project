@@ -79,13 +79,3 @@ def set_default(val: Optional[T], default: T) -> T:
         return default
 
     return val
-
-def iterlen(itr: Iterator[T]) -> Tuple[int, Iterator[T]]:
-    """Get the length of an iterator. Assumes the iterator is
-    finite; i.e. it eventually stops yielding new values.
-    Returns a copy of the iterator with the length. This is
-    necessary because the original iterator is consumed."""
-
-    t1, t2 = tee(itr)
-
-    return len(list(t1)), t2
