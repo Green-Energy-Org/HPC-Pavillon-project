@@ -1,6 +1,8 @@
 import argparse
 import io
 import time
+import re
+from typing import List
 
 from pavilion import commands
 from pavilion import plugins
@@ -9,6 +11,9 @@ from pavilion import status_file
 from pavilion.series.series import TestSeries
 from pavilion.test_config import file_format
 from pavilion.unittest import PavTestCase
+
+
+STATUS_REGEX = re.compile(r"^\s*[A-Z]")
 
 
 class StatusCmdTests(PavTestCase):
@@ -273,6 +278,7 @@ class StatusCmdTests(PavTestCase):
         raw = schedulers.get_plugin('raw')
         raw.schedule_tests(self.pav_cfg, [test])
         end = time.time() + 5
+
         while not test.complete and time.time() < end:
             time.sleep(.1)
 
@@ -282,7 +288,17 @@ class StatusCmdTests(PavTestCase):
         out.seek(0)
         output = out.readlines()[4:]
         statuses = test.status.history()
-        self.assertEqual(len(output), len(statuses), msg='output: {}, statuses: {}'
+
+        def count_statuses(out: List[str]) -> int:
+            num_statuses = 0
+
+            for line in out:
+                if re.search(STATUS_REGEX, line):
+                    num_statuses += 1
+
+            return num_statuses
+
+        self.assertEqual(count_statuses(output), len(statuses), msg='output: {}, statuses: {}'
                          .format(output, statuses))
         for i in range(len(output)):
             self.assertTrue(statuses[i].state in output[i])
