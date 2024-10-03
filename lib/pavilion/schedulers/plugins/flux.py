@@ -1,4 +1,5 @@
 # pylint: disable=too-many-lines
+# pylint: disable=no-self-use
 """The Flux Framework Scheduler Plugin."""
 
 import os
