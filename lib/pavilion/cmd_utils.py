@@ -8,12 +8,8 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import List, TextIO, Union
 from collections import defaultdict
-from enum import Enum, auto
-from itertools import chain, starmap, tee
-from argparse import Namespace
-from typing import (List, TextIO, Union, Iterator, Iterable,
-                    Callable, TypeVar, Optional, Any)
 
 from pavilion import config
 from pavilion import dir_db
@@ -23,117 +19,13 @@ from pavilion import output
 from pavilion import series
 from pavilion import sys_vars
 from pavilion import utils
-from pavilion.config import PavConfig
 from pavilion.errors import TestRunError, CommandError, TestSeriesError, \
                             PavilionError, TestGroupError
 from pavilion.test_run import TestRun, load_tests, TestAttributes
 from pavilion.types import ID_Pair
-from pavilion.micro import listmap, partition, flatten, unique, remove_all
-from pavilion.dir_db import SelectItems
 
 LOGGER = logging.getLogger(__name__)
 
-T = TypeVar('T')
-
-
-def expand_range(rng: str) -> Union[List[str], Iterator[str]]:
-    """Expand an integer range (given as a string) into the
-    sequence of (string representations) of integers specified by
-    that range."""
-
-    split_range = rng.split('-')
-
-    if len(split_range) == 1:
-        return split_range
-
-    start, end = split_range
-
-    return map(str, range(int(start), int(end) + 1))
-
-def expand_series_range(rng: str) -> Union[List[str], Iterator[str]]:
-    rng = rng.replace('s', '')
-    expanded = expand_range(rng)
-
-    return map(lambda x: f"s{x}", expanded)
-
-def expand_ranges(ranges: Iterable[str]) -> Iterator[T]:
-    """Given a sequence of ranges, expand all of them
-    out into a flat sequence of their elements."""
-
-    expanded = map(expand_range, ranges)
-
-    return flatten(expanded)
-
-def expand_series_ranges(ranges: Iterable[T]) -> Iterator[T]:
-    expanded = map(expand_series_range, ranges)
-
-    return flatten(expanded)
-
-def get_last_id(pav_cfg: PavConfig, errfile = None) -> Optional[str]:
-    raw_id = series.load_user_series_id(pav_cfg, errfile)
-
-    if raw_id is None and errfile is not None:
-        output.fprint(errfile, "User has no 'last' series for this machine.",
-                      color=output.YELLOW)
-
-        return
-
-    return raw_id
-
-def convert_last(raw_ids: Iterable[str], pav_cfg: PavConfig, errfile = None) -> List[str]:
-    raw_ids = list(raw_ids)
-    lastless = list(remove_all(raw_ids, 'last'))
-
-    if len(lastless) == len(raw_ids):
-        return raw_ids
-
-    last_id = get_last_id(pav_cfg, errfile)
-
-    if last_id is not None:
-        lastless.append(last_id)
-
-    return lastless
-
-def is_test_id(raw_id: str) -> bool:
-    return '.' in raw_id or utils.is_int(raw_id)
-
-def is_series_id(raw_id: str) -> bool:
-    return raw_id[0] == 's' and utils.is_int(raw_id[1:])
-
-def resolve_test_ids(ranges: Iterable[str]) -> List[str]:
-    ranges1, ranges2 = tee(ranges)
-
-    if 'all' in ranges1:
-        return ['all']
-
-    expanded = expand_ranges(ranges2)
-
-    return unique(expanded)
-
-def resolve_series_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
-    ranges1, ranges2 = tee(ranges)
-
-    if 'all' in ranges1:
-        return ['all']
-
-    ranges = convert_last(ranges2, pav_cfg)
-    ranges = map(lambda x: x.replace('s', ''), ranges)
-    series_ids = expand_ranges(ranges)
-
-    return unique(map(lambda x: f"s{x}", series_ids))
-
-def resolve_all_ids(ranges: Iterable[str], pav_cfg: PavConfig) -> List[str]:
-    ranges1, ranges2 = tee(ranges)
-
-    if ['all'] in ranges1:
-        return ['all']
-
-    series_ranges, test_ranges = partition(lambda rng: rng[0] == 's', ranges2)
-
-    test_ids = resolve_test_ids(test_ranges)
-    series_ids = resolve_series_ids(series_ranges, pav_cfg)
-
-    return chain.from_iterable([test_ids, series_ids])
 
 def load_last_series(pav_cfg, errfile: TextIO) -> Union[series.TestSeries, None]:
     """Load the series object for the last series run by this user on this system."""
@@ -150,15 +42,17 @@ def load_last_series(pav_cfg, errfile: TextIO) -> Union[series.TestSeries, None]
         output.fprint(errfile, "Failed to load last series: {}".format(err.args[0]))
         return None
 
+
 def set_arg_defaults(args):
     """Set typical argument defaults, but don't override any given."""
 
     # Don't assume these actually exist.
-    def_filter = make_default_filter_query()
+    def_filter = make_filter_query()
     args.filter = getattr(args, 'filter', def_filter)
 
 
-def arg_filtered_tests(pav_cfg, args: Namespace, verbose: TextIO = None) -> SelectItems:
+def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
+                       verbose: TextIO = None) -> dir_db.SelectItems:
     """Search for test runs that match based on the argument values in args,
     and return a list of matching test id's.
 
@@ -177,7 +71,7 @@ def arg_filtered_tests(pav_cfg, args: Namespace, verbose: TextIO = None) -> Sele
         or 'all' keyword. Last implies the last test series run by the current user
         on this system (and is the default if no tests are given. 'all' means all tests.
     :param verbose: A file like object to report test search status.
-    :return: A list of test paths
+    :return: A list of test paths.
     """
 
     limit = getattr(args, 'limit', filters.TEST_FILTER_DEFAULTS['limit'])
@@ -185,57 +79,84 @@ def arg_filtered_tests(pav_cfg, args: Namespace, verbose: TextIO = None) -> Sele
     sys_name = getattr(args, 'sys_name', sys_vars.get_vars(defer=True).get('sys_name'))
     sort_by = getattr(args, 'sort_by', 'created')
 
+    ids = []
+    for test_range in args.tests:
+        if '-' in test_range:
+            id_start, id_end = test_range.split('-', 1)
+            if id_start.startswith('s'):
+                series_range_start = int(id_start.replace('s',''))
+                if id_end.startswith('s'):
+                    series_range_end = int(id_end.replace('s',''))
+                else:
+                    series_range_end = int(id_end)
+                series_ids = range(series_range_start, series_range_end+1)
+                for sid in series_ids:
+                    ids.append('s' + str(sid))
+            else:
+                test_range_start = int(id_start)
+                test_range_end = int(id_end)
+                test_ids = range(test_range_start, test_range_end+1)
+                for tid in test_ids:
+                    ids.append(str(tid))
+        else:
+            ids.append(test_range)
+    args.tests = ids
+
+    if 'all' in args.tests:
+        for arg, default in filters.TEST_FILTER_DEFAULTS.items():
+            if hasattr(args, arg) and default != getattr(args, arg):
+                break
+        else:
+            output.fprint(verbose, "Using default search filters: The current system, user, and "
+                                   "created less than 1 day ago.", color=output.CYAN)
+            args.filter = make_filter_query()
+
     if args.filter is None:
         filter_func = filters.const(True) # Always return True
     else:
         filter_func = filters.parse_query(args.filter)
 
-    args.tests = list(resolve_all_ids(args.tests, pav_cfg))
+    order_func, order_asc = filters.get_sort_opts(sort_by, "TEST")
 
     if 'all' in args.tests:
-        args_specified = starmap(
-            lambda key, value: arg_specified(args, key, value),
-            filters.SERIES_FILTER_DEFAULTS.items()
-        )
+        tests = dir_db.SelectItems([], [])
+        working_dirs = set(map(lambda cfg: cfg['working_dir'],
+                               pav_cfg.configs.values()))
 
-        if not any(args_specified):
-            output.fprint(verbose, "Using default search filters: The current system, user, and "
-                                   "created less than 1 day ago.", color=output.CYAN)
-            filter_func = make_default_filter_query()
+        for working_dir in working_dirs:
+            matching_tests = dir_db.select(
+                pav_cfg,
+                id_dir=working_dir / 'test_runs',
+                transform=TestAttributes,
+                filter_func=filter_func,
+                order_func=order_func,
+                order_asc=order_asc,
+                verbose=verbose,
+                limit=limit)
 
-        tests = get_all_tests(pav_cfg, sort_by, filter_func, limit, verbose)
-    else:
-        if args.tests is None:
-            args.tests = [get_last_id(pav_cfg)]
+            tests.data.extend(matching_tests.data)
+            tests.paths.extend(matching_tests.paths)
 
-        ids = convert_last(args.tests, pav_cfg)
-        series_ranges, test_ranges = partition(lambda x: x[0] == 's', ids)
+        return tests
 
-        test_ids = unique(expand_ranges(test_ranges))
-        series_ids = unique(expand_series_ranges(series_ranges))
+    if not args.tests:
+        args.tests.append('last')
 
-        test_ids.extend(series_ids)
+    test_paths = test_list_to_paths(pav_cfg, args.tests, verbose)
 
-        test_paths = test_list_to_paths(pav_cfg, test_ids, verbose)
+    return dir_db.select_from(
+        pav_cfg,
+        paths=test_paths,
+        transform=TestAttributes,
+        filter_func=filter_func,
+        order_func=order_func,
+        order_asc=order_asc,
+        limit=limit
+    )
 
-        order_func, order_asc = filters.get_sort_opts(sort_by, "TEST")
 
-        tests = dir_db.select_from(
-            pav_cfg,
-            paths=test_paths,
-            transform=TestAttributes,
-            filter_func=filter_func,
-            order_func=order_func,
-            order_asc=order_asc,
-            limit=limit
-        )
-
-    return tests
-
-def make_default_filter_query() -> str:
-    """Create the default filter query"""
-
-    template = 'user={} and created>{}'
+def make_filter_query() -> str:
+    template = 'user={} and created<{}'
 
     user = utils.get_login()
     time = (dt.datetime.now() - dt.timedelta(days=1)).isoformat()
@@ -249,51 +170,8 @@ def make_default_filter_query() -> str:
 
     return template.format(*fargs)
 
-def arg_specified(args: argparse.Namespace, arg: str, default: Any) -> bool:
-    """Determine whether the given argument is specified in the given
-    namespace (and is not set to the default value)."""
 
-    return hasattr(args, arg) and getattr(args, arg) != default
-
-def get_all_tests(pav_cfg: PavConfig, sort_by: str, filter_func: Callable, limit, verbose: TextIO):
-    tests = SelectItems([], [])
-    working_dirs = set(map(lambda cfg: cfg['working_dir'],
-                           pav_cfg.configs.values()))
-
-    order_func, order_asc = filters.get_sort_opts(sort_by, "TEST")
-
-    for working_dir in working_dirs:
-        matching_tests = dir_db.select(
-            pav_cfg,
-            id_dir=working_dir / 'test_runs',
-            transform=TestAttributes,
-            filter_func=filter_func,
-            order_func=order_func,
-            order_asc=order_asc,
-            verbose=verbose,
-            limit=limit)
-
-        tests.data.extend(matching_tests.data)
-        tests.paths.extend(matching_tests.paths)
-
-    return tests
-
-def get_all_series(pav_cfg: PavConfig, sort_by, filter_func: Callable, limit, verbose: TextIO):
-    order_func, order_asc = filters.get_sort_opts(sort_by, 'SERIES')
-
-    return dir_db.select(
-        pav_cfg=pav_cfg,
-        id_dir=pav_cfg.working_dir/'series',
-        filter_func=filter_func,
-        transform=series.mk_series_info_transform(pav_cfg),
-        order_func=order_func,
-        order_asc=order_asc,
-        use_index=False,
-        verbose=verbose,
-        limit=limit,
-    ).data
-
-def arg_filtered_series(pav_cfg: PavConfig, args: argparse.Namespace,
+def arg_filtered_series(pav_cfg: config.PavConfig, args: argparse.Namespace,
                         verbose: TextIO = None) -> List[series.SeriesInfo]:
     """Return a list of SeriesInfo objects based on the args.series attribute. When args.series is
     empty, default to the 'last' series started by the user on this system. If 'all' is given,
@@ -303,35 +181,61 @@ def arg_filtered_series(pav_cfg: PavConfig, args: argparse.Namespace,
     limit = getattr(args, 'limit', filters.SERIES_FILTER_DEFAULTS['limit'])
     verbose = verbose or io.StringIO()
 
-    if args.series is None:
+    if not args.series:
         args.series = ['last']
 
-    args.series = resolve_series_ids(args.series, pav_cfg)
-
     if 'all' in args.series:
-        args_specified = starmap(
-            lambda key, value: arg_specified(args, key, value),
-            filters.SERIES_FILTER_DEFAULTS.items()
-        )
-
-        if not any(args_specified):
+        for arg, default in filters.SERIES_FILTER_DEFAULTS.items():
+            if hasattr(args, arg) and default != getattr(args, arg):
+                break
+        else:
             output.fprint(verbose, "Using default search filters: The current system, user, and "
                                    "created less than 1 day ago.", color=output.CYAN)
-            args.filter = make_default_filter_query()
+            args.filter = make_filter_query()
 
-        sort_by = getattr(args, 'sort_by', filters.SERIES_FILTER_DEFAULTS['sort_by'])
+    seen_sids = []
+    found_series = []
+    for sid in args.series:
+        # Go through each provided sid (including last and all) and find all
+        # matching series. Then only add them if we haven't seen them yet.
+        if sid == 'last':
+            last_series = load_last_series(pav_cfg, verbose)
+            if last_series is None:
+                return []
 
-        if args.filter is None:
-            filter_func = filters.const(True)  # Always return True
+            found_series.append(last_series.info())
+
+        elif sid == 'all':
+            sort_by = getattr(args, 'sort_by', filters.SERIES_FILTER_DEFAULTS['sort_by'])
+            order_func, order_asc = filters.get_sort_opts(sort_by, 'SERIES')
+
+            if args.filter is None:
+                filter_func = filters.const(True)  # Always return True
+            else:
+                filter_func = filters.parse_query(args.filter)
+
+            found_series = dir_db.select(
+                pav_cfg=pav_cfg,
+                id_dir=pav_cfg.working_dir/'series',
+                filter_func=filter_func,
+                transform=series.mk_series_info_transform(pav_cfg),
+                order_func=order_func,
+                order_asc=order_asc,
+                use_index=False,
+                verbose=verbose,
+                limit=limit,
+            ).data
         else:
-            filter_func = filters.parse_query(args.filter)
+            found_series.append(series.SeriesInfo.load(pav_cfg, sid))
 
-        found_series = get_all_series(pav_cfg, sort_by, filter_func, limit, verbose)
+    matching_series = []
+    for sinfo in found_series:
+        if sinfo.sid not in seen_sids:
+            matching_series.append(sinfo)
+            seen_sids.append(sinfo.sid)
 
-    else:
-        found_series = listmap(lambda x: series.SeriesInfo.load(pav_cfg, x), args.series)
+    return matching_series
 
-    return found_series
 
 def read_test_files(pav_cfg, files: List[str]) -> List[str]:
     """Read the given files which contain a list of tests (removing comments)
@@ -397,7 +301,18 @@ def test_list_to_paths(pav_cfg, req_tests, errfile=None) -> List[Path]:
     test_paths = []
     for raw_id in req_tests:
 
-        if is_test_id(raw_id):
+        if raw_id == 'last':
+            raw_id = series.load_user_series_id(pav_cfg, errfile)
+            if raw_id is None:
+                output.fprint(errfile, "User has no 'last' series for this machine.",
+                              color=output.YELLOW)
+                continue
+
+        if raw_id is None or not raw_id:
+            continue
+
+        if '.' in raw_id or utils.is_int(raw_id):
+            # This is a test id.
             try:
                 test_wd, _id = TestRun.parse_raw_id(pav_cfg, raw_id)
             except TestRunError as err:
@@ -410,7 +325,8 @@ def test_list_to_paths(pav_cfg, req_tests, errfile=None) -> List[Path]:
                 output.fprint(errfile,
                               "Test run with id '{}' could not be found.".format(raw_id),
                               color=output.YELLOW)
-        elif is_series_id(raw_id):
+        elif raw_id[0] == 's' and utils.is_int(raw_id[1:]):
+            # A series.
             try:
                 test_paths.extend(
                     series.list_series_tests(pav_cfg, raw_id))
@@ -443,6 +359,7 @@ def test_list_to_paths(pav_cfg, req_tests, errfile=None) -> List[Path]:
                     .format(raw_id))
 
     return test_paths
+
 
 def _filter_tests_by_raw_id(pav_cfg, id_pairs: List[ID_Pair],
                             exclude_ids: List[str]) -> List[ID_Pair]:
@@ -521,7 +438,7 @@ def get_tests_by_id(pav_cfg, test_ids: List['str'], errfile: TextIO,
     :return: List of test objects
     """
 
-    test_ids = list(map(str, test_ids))
+    test_ids = [str(test) for test in test_ids.copy()]
 
     if not test_ids:
         # Get the last series ran by this user
@@ -533,7 +450,6 @@ def get_tests_by_id(pav_cfg, test_ids: List['str'], errfile: TextIO,
 
     # Convert series and test ids into test paths.
     test_id_pairs = []
-
     for raw_id in test_ids:
         # Series start with 's' (like 'snake') and never have labels
         if '.' not in raw_id and raw_id.startswith('s'):
