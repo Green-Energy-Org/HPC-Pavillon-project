@@ -150,6 +150,7 @@ def safe_update(date: datetime, year: int = None, month: int = None, day: int = 
     want to guard against February 30th. This function is necessary because datetime.timedelta
     can't handle variable-size units of time (i.e. months and years).
     """
+
     if year is None:
         year = date.year
     if month is None:

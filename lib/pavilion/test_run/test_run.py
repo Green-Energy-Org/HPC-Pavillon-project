@@ -38,11 +38,10 @@ from pavilion.test_config.file_format import NO_WORKING_DIR
 from pavilion.test_config.utils import parse_timeout
 from pavilion.types import ID_Pair
 from pavilion.micro import get_nested
-from pavilion.abc import Cancellable
 from .test_attrs import TestAttributes
 
 
-class TestRun(TestAttributes, Cancellable):
+class TestRun(TestAttributes):
     """The central pavilion test object. Handle saving, monitoring and running
     tests.
 
