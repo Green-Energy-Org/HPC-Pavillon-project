@@ -746,6 +746,15 @@ class TestSet:
 
         return completed_tests
 
+
+    @property
+    def parents_complete(self) -> bool:
+        """Determine whether the test is ready to run, that is, whether all of its parent sets
+        have completed running."""
+
+        return all(map(lambda par: par.done, self.parent_sets))
+
+
     @property
     def should_run(self) -> Union[bool, None]:
         """Evaluate whether this set should run at all, and mark it as 'done'

@@ -12,6 +12,7 @@ import subprocess
 import time
 from collections import defaultdict, OrderedDict
 from pathlib import Path
+from operator import attrgetter
 from typing import List, Dict, Set, Union, TextIO, Iterator
 
 import pavilion
@@ -29,6 +30,7 @@ from pavilion.status_file import SeriesStatusFile, SERIES_STATES
 from pavilion.test_run import TestRun
 from pavilion.types import ID_Pair
 from pavilion.abc import Cancellable
+from pavilion.micro import partition
 from yaml_config import YAMLError, RequiredError
 from .info import SeriesInfo
 from .test_set import TestSet
@@ -416,7 +418,6 @@ differentiate it from test ids."""
             raise
 
         # The names of all test sets that have completed.
-        complete = set()  # type: Set[str]
 
         repeat = self.repeat
 
@@ -429,15 +430,10 @@ differentiate it from test ids."""
         repeat_iteration = 0
 
         # run sets in order
-        while potential_sets:
+        while len(potential_sets) > 0:
 
-            sets_to_run = []  # type: List[TestSet]
-
-            # kick off any sets that aren't waiting on any sets to complete
-            for test_set in potential_sets:
-                parent_names = [parent.name for parent in test_set.parent_sets]
-                if all(map(lambda par: par in complete, parent_names)):
-                    sets_to_run.append(test_set)
+            # Separate out sets whose parents have completed running
+            sets_to_run, waiting_sets = partition(attrgetter("parents_complete"), potential_sets)
 
             for test_set in sets_to_run:
                 # Make sure it's ok to run this test set based on parent status.
@@ -461,12 +457,11 @@ differentiate it from test ids."""
                         "Error making tests for series '{}'."
                         .format(self.sid), err)
 
-            for test_set in sets_to_run:
-                potential_sets.remove(test_set)
+            potential_sets = list(waiting_sets)
 
             repeat -= 1
 
-            if not potential_sets and repeat:
+            if len(potential_sets) == 0 and repeat > 0:
                 # If we're repeating multiple times, reset the test sets for the series
                 # and recreate them to run again.
                 repeat_iteration += 1
