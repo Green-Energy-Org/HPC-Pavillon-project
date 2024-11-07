@@ -2,17 +2,16 @@
 
 import io
 from collections import defaultdict
-from typing import List, TextIO, Iterable
+from typing import List, TextIO
 import time
 
 from pavilion import schedulers
 from pavilion import utils
 from pavilion.test_run import TestRun, load_tests
 from pavilion import output
-from pavilion.config import PavConfig
 
 
-def cancel_jobs(pav_cfg: PavConfig, tests: Iterable[TestRun], errfile: TextIO = None) -> List[dict]:
+def cancel_jobs(pav_cfg, tests: List[TestRun], errfile: TextIO = None) -> List[dict]:
     """Collect all jobs from the given tests, and cancel them if all the tests
     attached to those jobs have been cancelled.
 
@@ -66,8 +65,8 @@ SLEEP_PERIOD = 0.3
 SERIES_WARN_EXPIRE = 60*60*24  # 24 hours
 
 
-def cancel_tests(pav_cfg: PavConfig, tests: Iterable[TestRun], outfile: TextIO,
-                 max_wait: float = 3.0, no_series_warning: bool = False) -> int:
+def cancel_tests(pav_cfg, tests: List, outfile: TextIO,
+                 max_wait: float = 3.0, no_series_warning=False):
     """Cancel all of the given tests, printing useful user messages and error information."""
 
     user = utils.get_login()
