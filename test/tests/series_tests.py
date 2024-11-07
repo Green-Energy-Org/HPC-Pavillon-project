@@ -383,17 +383,15 @@ class SeriesTests(PavTestCase):
 
         cancel_file = ser.path / ser.CANCEL_FN
 
-        ser.run()
         self.assertFalse(ser.has_cancel_file())
 
         cancel_file.touch()
 
-        time.sleep(0.3)
-
         self.assertTrue(ser.has_cancel_file())
+
+        ser.run()
 
         time.sleep(0.5)
 
         # Check state to verify that it was cancelled
-        import pdb; pdb.set_trace()
         self.assertTrue(ser.status.has_state('CANCELED'))

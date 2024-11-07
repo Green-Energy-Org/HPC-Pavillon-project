@@ -51,7 +51,7 @@ class TestSeries(Cancellable):
     DEPENDENCY_FN = 'dependency'
     OUT_FN = 'series.out'
     PGID_FN = 'series.pgid'
-    CANCEL_FN = 'series.CANCELLED'
+    CANCEL_FN = 'series.CANCELED'
     NAME_RE = re.compile('[a-z][a-z0-9_-]+$')
 
     def __init__(self, pav_cfg: config.PavConfig, series_cfg, _id=None,
@@ -413,9 +413,6 @@ differentiate it from test ids."""
 
         if checked and cancelled:
             self._cancel_tests(message="Series cancelled by another user.""")
-            self.status.set(
-                SERIES_STATES.CANCELLED,
-                "Series cancelled by another Pavilion user.")
 
             return True
 
@@ -460,7 +457,7 @@ differentiate it from test ids."""
 
         # run sets in order
         while len(potential_sets) > 0:
-            
+
             if self.check_cancelled():
                 return
 
@@ -492,7 +489,7 @@ differentiate it from test ids."""
             potential_sets = list(waiting_sets)
 
             repeat -= 1
-            
+
             if self.check_cancelled():
                 return
 

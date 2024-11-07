@@ -22,7 +22,7 @@ class TimeLimiter:
         if current_time - self.last_called > self.cooldown:
             res = self.function()
             self.last_called = current_time
-            
+
             return (True, res)
 
         return (False, None)
