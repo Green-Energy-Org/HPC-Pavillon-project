@@ -13,7 +13,7 @@ class SeriesTests(PavTestCase):
     def test_init(self):
         """Check initialization of the series object."""
 
-        ignore_keys = ['outfile']
+        ignore_keys = ['outfile', 'cancel_limiter']
 
         # Initialize from scratch
         series1 = series.TestSeries(
@@ -384,15 +384,16 @@ class SeriesTests(PavTestCase):
         cancel_file = ser.path / ser.CANCEL_FN
 
         ser.run()
-        self.assertFalse(ser.check_canceled())
+        self.assertFalse(ser.has_cancel_file())
 
         cancel_file.touch()
 
         time.sleep(0.3)
 
-        self.assertTrue(ser.check_canceled())
+        self.assertTrue(ser.has_cancel_file())
 
         time.sleep(0.5)
 
         # Check state to verify that it was cancelled
+        import pdb; pdb.set_trace()
         self.assertTrue(ser.status.has_state('CANCELED'))

@@ -3,6 +3,7 @@
 import argparse
 import errno
 import sys
+from argparse import Namespace
 from typing import List
 
 from pavilion import arguments
@@ -17,6 +18,7 @@ from pavilion import series_config
 from pavilion import sys_vars
 from pavilion import utils
 from pavilion.errors import TestSeriesError, TestSeriesWarning
+from pavilion.config import PavConfig
 from .base_classes import Command, sub_cmd
 
 
@@ -426,7 +428,7 @@ class RunSeries(Command):
             )
 
     @sub_cmd()
-    def _cancel_cmd(self, pav_cfg, args):
+    def _cancel_cmd(self, pav_cfg: PavConfig, args: Namespace) -> int:
         """Cancel all series found given the arguments."""
 
         series_info = cmd_utils.arg_filtered_series(pav_cfg, args, verbose=self.errfile)

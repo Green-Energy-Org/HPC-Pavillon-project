@@ -11,6 +11,7 @@ from pathlib import Path
 from collections import defaultdict
 from enum import Enum, auto
 from itertools import chain, starmap, tee
+from argparse import Namespace
 from typing import (List, TextIO, Union, Iterator, Iterable,
                     Callable, TypeVar, Optional, Any)
 
@@ -28,6 +29,7 @@ from pavilion.errors import TestRunError, CommandError, TestSeriesError, \
 from pavilion.test_run import TestRun, load_tests, TestAttributes
 from pavilion.types import ID_Pair
 from pavilion.micro import listmap, partition, flatten, unique, remove_all
+from pavilion.dir_db import SelectItems
 
 LOGGER = logging.getLogger(__name__)
 
@@ -156,8 +158,7 @@ def set_arg_defaults(args):
     args.filter = getattr(args, 'filter', def_filter)
 
 
-def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
-                       verbose: TextIO = None) -> dir_db.SelectItems:
+def arg_filtered_tests(pav_cfg, args: Namespace, verbose: TextIO = None) -> SelectItems:
     """Search for test runs that match based on the argument values in args,
     and return a list of matching test id's.
 
@@ -255,7 +256,7 @@ def arg_specified(args: argparse.Namespace, arg: str, default: Any) -> bool:
     return hasattr(args, arg) and getattr(args, arg) != default
 
 def get_all_tests(pav_cfg: PavConfig, sort_by: str, filter_func: Callable, limit, verbose: TextIO):
-    tests = dir_db.SelectItems([], [])
+    tests = SelectItems([], [])
     working_dirs = set(map(lambda cfg: cfg['working_dir'],
                            pav_cfg.configs.values()))
 
@@ -292,7 +293,7 @@ def get_all_series(pav_cfg: PavConfig, sort_by, filter_func: Callable, limit, ve
         limit=limit,
     ).data
 
-def arg_filtered_series(pav_cfg: config.PavConfig, args: argparse.Namespace,
+def arg_filtered_series(pav_cfg: PavConfig, args: argparse.Namespace,
                         verbose: TextIO = None) -> List[series.SeriesInfo]:
     """Return a list of SeriesInfo objects based on the args.series attribute. When args.series is
     empty, default to the 'last' series started by the user on this system. If 'all' is given,
