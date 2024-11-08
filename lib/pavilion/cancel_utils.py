@@ -158,11 +158,11 @@ def cancel_tests(pav_cfg: PavConfig, tests: Iterable[TestRun], outfile: TextIO,
     return 0
 
 
-def cancel_series(sers: Iterable["TestSeries"]) -> int:
+def cancel_series(sers: Iterable["TestSeries"], errfile: TextIO = None) -> int:
     """Cancel all the series in the sequence."""
 
     running_series = not_completed(sers)
 
-    do(lambda x: x.cancel(), sers)
+    do(lambda x: x.cancel(), running_series)
 
     return 0
