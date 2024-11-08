@@ -158,7 +158,7 @@ def cancel_tests(pav_cfg: PavConfig, tests: Iterable[TestRun], outfile: TextIO,
     return 0
 
 
-def cancel_series(sers: Iterable["TestSeries"]) -> int: 
+def cancel_series(sers: Iterable["TestSeries"]) -> int:
     """Cancel all the series in the sequence."""
 
     running_series = not_completed(sers)
