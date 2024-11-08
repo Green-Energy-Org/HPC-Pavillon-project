@@ -442,8 +442,6 @@ differentiate it from test ids."""
         if self.check_cancelled():
             return
 
-        # The names of all test sets that have completed.
-
         repeat = self.repeat
 
         simultaneous = self.config['simultaneous']

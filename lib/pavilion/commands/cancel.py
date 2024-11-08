@@ -2,6 +2,7 @@
 
 import errno
 import time
+from argparse import Namespace
 
 from pavilion import cancel_utils
 from pavilion import cmd_utils
@@ -10,6 +11,7 @@ from pavilion import output
 from pavilion import series
 from pavilion.errors import TestSeriesError
 from pavilion.test_run import TestRun
+from pavilion.config import PavConfig
 from .base_classes import Command
 from ..errors import TestRunError
 
@@ -39,16 +41,15 @@ class CancelCommand(Command):
                  'in the most recent series submitted by the user is cancelled.')
         filters.add_test_filter_args(parser, sort_keys=[], disable_opts=['sys-name'])
 
-    def run(self, pav_cfg, args):
+    def run(self, pav_cfg: PavConfig, args: Namespace) -> int:
         """Cancel the given tests."""
 
-        if not args.tests:
+        if len(args.tests) == 0:
             # Get the last series ran by this user.
             series_id = series.load_user_series_id(pav_cfg)
+
             if series_id is not None:
                 args.tests.append(series_id)
-
-        cancelled_series = False
 
         test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
 

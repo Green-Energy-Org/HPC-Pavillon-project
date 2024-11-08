@@ -3,8 +3,8 @@ tasks and patterns, for the purpose of conciseness and readability."""
 
 from pathlib import Path
 from itertools import filterfalse, chain, tee
-from typing import (List, Union, TypeVar, Iterator, Iterable, Callable, Optional,
-                    Hashable, Dict, Tuple)
+from typing import (List, Union, TypeVar, Iterator, Iterable, Callable, Optional, Hashable, Dict,
+                    Tuple, Any)
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -28,7 +28,8 @@ def remove_all(lst: Iterable[T], item: T) -> Iterator[T]:
     return filter(lambda x: x != item, lst)
 
 def unique(lst: Iterable[T]) -> List[T]:
-    """Return a list of the unique items in the original list."""
+    """Return a list of the unique items in the original list.
+    Not guaranteed to preserve the order of unique items."""
     return list(set(lst))
 
 def replace(lst: Iterable[T], old: T, new: T) -> Iterator[T]:
@@ -79,3 +80,11 @@ def set_default(val: Optional[T], default: T) -> T:
         return default
 
     return val
+
+def do(func: Callable[[T], Any], lst: Iterable[T]) -> None:
+    """Map the function over the sequence of objects, ensuring
+    that all side effects occur. This is necessary because map
+    is lazily evaluated."""
+
+    # We force this behavior by converting to a list and discarding it 
+    listmap(func, lst)
