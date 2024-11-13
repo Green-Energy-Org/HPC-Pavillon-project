@@ -1,10 +1,17 @@
-"""A collection of 'microfunctions' primarily designed to abstract common
-tasks and patterns, for the purpose of conciseness and readability."""
+"""
+A collection of 'microfunctions' primarily designed to abstract common
+tasks and patterns, for the purpose of conciseness and readability.
+
+Some functions are borrowed from the recipes in the itertools docs:
+
+https://docs.python.org/3/library/itertools.html#itertools-recipes
+"""
 
 from pathlib import Path
-from itertools import filterfalse, chain, tee
-from typing import (List, Union, TypeVar, Iterator, Iterable, Callable, Optional,
-                    Hashable, Dict, Tuple)
+from itertools import filterfalse, chain, tee, islice
+from collections import deque
+from typing import (List, Union, TypeVar, Iterator, Iterable, Callable, Optional, Hashable, Dict,
+                    Tuple, Any)
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -20,7 +27,9 @@ def partition(pred: Callable[[T], bool], lst: Iterable[T]) -> Tuple[Iterator[T],
     return filter(pred, f_true), filterfalse(pred, f_false)
 
 def flatten(lst: Iterable[Iterable[T]]) -> Iterator[T]:
-    """Convert a singly nested iterable into an unnested iterable."""
+    """Convert a singly nested iterable into an unnested iterable.
+
+    Borrowed from the itertools docs."""
     return chain.from_iterable(lst)
 
 def remove_all(lst: Iterable[T], item: T) -> Iterator[T]:
@@ -28,7 +37,8 @@ def remove_all(lst: Iterable[T], item: T) -> Iterator[T]:
     return filter(lambda x: x != item, lst)
 
 def unique(lst: Iterable[T]) -> List[T]:
-    """Return a list of the unique items in the original list."""
+    """Return a list of the unique items in the original list.
+    Not guaranteed to preserve the order of unique items."""
     return list(set(lst))
 
 def replace(lst: Iterable[T], old: T, new: T) -> Iterator[T]:
@@ -79,3 +89,21 @@ def set_default(val: Optional[T], default: T) -> T:
         return default
 
     return val
+
+def consume(lst: Iterator[Any], num_items: int = None) -> None:
+    """Advance the iterator by num_items. If n is None, consume entirely.
+
+    Useful for forcing side-effects for mapped functions."""
+
+    if num_items is None:
+        deque(lst, maxlen=0)
+    else:
+        next(islice(lst, num_items, num_items), None)
+
+# pylint: disable=C0103
+def do(func: Callable[[T], Any], lst: Iterable[T]) -> None:
+    """Map the function over the sequence of objects, ensuring
+    that all side effects occur. This is necessary because map
+    is lazily evaluated."""
+
+    consume(map(func, lst))

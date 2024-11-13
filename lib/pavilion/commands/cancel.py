@@ -2,6 +2,7 @@
 
 import errno
 import time
+from argparse import Namespace
 
 from pavilion import cancel_utils
 from pavilion import cmd_utils
@@ -10,6 +11,8 @@ from pavilion import output
 from pavilion import series
 from pavilion.errors import TestSeriesError
 from pavilion.test_run import TestRun
+from pavilion.config import PavConfig
+from pavilion.micro import partition
 from .base_classes import Command
 from ..errors import TestRunError
 
@@ -39,19 +42,31 @@ class CancelCommand(Command):
                  'in the most recent series submitted by the user is cancelled.')
         filters.add_test_filter_args(parser, sort_keys=[], disable_opts=['sys-name'])
 
-    def run(self, pav_cfg, args):
-        """Cancel the given tests."""
+    def run(self, pav_cfg: PavConfig, args: Namespace) -> int:
+        """Cancel the given tests or series."""
 
-        if not args.tests:
+        if len(args.tests) == 0:
             # Get the last series ran by this user.
             series_id = series.load_user_series_id(pav_cfg)
+
             if series_id is not None:
                 args.tests.append(series_id)
 
-        cancelled_series = False
+        # Separate out into tests and series
+        series_ids, test_ids = partition(cmd_utils.is_series_id, args.tests)
 
+        args.tests = test_ids
+        args.series = series_ids
+
+        # Get TestRun and TestSeries objects
         test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
-
         tests = cmd_utils.get_tests_by_paths(pav_cfg, test_paths, errfile=self.errfile)
 
-        return cancel_utils.cancel_tests(pav_cfg, tests, self.outfile)
+        sinfos = cmd_utils.arg_filtered_series(pav_cfg, args, verbose=self.errfile)
+        test_series = map(lambda x: series.TestSeries.load(pav_cfg, x.sid), sinfos)
+
+        # Cancel TestRuns and TestSeries
+        test_ret = cancel_utils.cancel_tests(pav_cfg, tests, self.outfile)
+        sers_ret = cancel_utils.cancel_series(test_series, self.outfile)
+
+        return test_ret or sers_ret

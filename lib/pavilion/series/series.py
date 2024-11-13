@@ -1,3 +1,4 @@
+# pylint: disable=W0221
 """Series are built around a config that specifies a 'series' of tests to run. It
 also tracks the tests that have run under it."""
 import io
@@ -11,7 +12,8 @@ import subprocess
 import time
 from collections import defaultdict, OrderedDict
 from pathlib import Path
-from typing import List, Dict, Set, Union, TextIO, Iterator
+from operator import attrgetter
+from typing import List, Dict, Set, Union, TextIO, Iterator, Optional
 
 import pavilion
 from pavilion import cancel_utils
@@ -27,6 +29,8 @@ from pavilion.series_config import SeriesConfigLoader
 from pavilion.status_file import SeriesStatusFile, SERIES_STATES
 from pavilion.test_run import TestRun
 from pavilion.types import ID_Pair
+from pavilion.micro import partition
+from pavilion.limiter import TimeLimiter
 from yaml_config import YAMLError, RequiredError
 from .info import SeriesInfo
 from .test_set import TestSet
@@ -46,16 +50,20 @@ class TestSeries:
     DEPENDENCY_FN = 'dependency'
     OUT_FN = 'series.out'
     PGID_FN = 'series.pgid'
+    CANCEL_FN = 'series.CANCELED'
     NAME_RE = re.compile('[a-z][a-z0-9_-]+$')
 
     def __init__(self, pav_cfg: config.PavConfig, series_cfg, _id=None,
-                 verbosity: Verbose = Verbose.HIGH, outfile: TextIO = None):
+                 verbosity: Verbose = Verbose.HIGH, outfile: TextIO = None,
+                 cancel_cooldown: float = 0.5):
         """Initialize the series. Test sets may be added via 'add_tests()'.
 
         :param pav_cfg: The pavilion configuration object.
         :param series_cfg: Series config, if generated from a series file.
         :param _id: The test id number. If this is given, it implies that
             we're regenerating this series from saved files.
+        :param cancel_cooldown: The minimum time permitted between attempts
+            to cancel the series, in seconds.
         """
 
         self.pav_cfg: config.PavConfig = pav_cfg
@@ -64,6 +72,7 @@ class TestSeries:
 
         self.outfile = io.StringIO() if outfile is None else outfile
         self.verbosity = verbosity
+        self.cancel_limiter = TimeLimiter(self.has_cancel_file, cooldown=cancel_cooldown)
 
         name = self.config.get('name') or 'unnamed'
         if not self.NAME_RE.match(name):
@@ -357,7 +366,7 @@ differentiate it from test ids."""
 
         self.test_sets = {}
 
-    def cancel(self, message=None, cancel_tests=True):
+    def _cancel_tests(self, message: str = None, cancel_tests: bool = True) -> None:
         """Goes through all test objects assigned to series and cancels tests
         that haven't been completed.
 
@@ -373,11 +382,40 @@ differentiate it from test ids."""
 
         if cancel_tests:
             for test in self.tests.values():
+                # Cancel the test
                 test.cancel(message or "Cancelled via series. Reason not given.")
 
-            cancel_utils.cancel_jobs(self.pav_cfg, List[self.tests.values()])
+            # Cancel the scheduler jobs associated with the tests
+            cancel_utils.cancel_jobs(self.pav_cfg, self.tests.values())
 
         self.status.set(SERIES_STATES.CANCELED, "Series cancelled: {}".format(message))
+
+    def cancel(self, message: str = None, cancel_tests: bool = True) -> None:
+        """Create the cancellation file for the series, then (optionally) cancel
+        all tests assocated with the series."""
+
+        cancel_file = self.path / self.CANCEL_FN
+        cancel_file.touch()
+
+        self._cancel_tests(message, cancel_tests)
+
+    def has_cancel_file(self) -> bool:
+        """Determine whether the series has been cancelled."""
+
+        return (self.path / self.CANCEL_FN).exists()
+
+    def check_cancelled(self) -> bool:
+        """Check whether the cancel file has been created, and if it has been,
+        cancel the series."""
+
+        checked, cancelled = self.cancel_limiter()
+
+        if checked and cancelled:
+            self._cancel_tests(message="Series cancelled by another user.""")
+
+            return True
+
+        return False
 
     def run(self, build_only: bool = False, rebuild: bool = False,
             local_builds_only: bool = False):
@@ -401,8 +439,8 @@ differentiate it from test ids."""
                             "Error creating test sets: {}".format(err.args[0]))
             raise
 
-        # The names of all test sets that have completed.
-        complete = set()  # type: Set[str]
+        if self.check_cancelled():
+            return
 
         repeat = self.repeat
 
@@ -415,15 +453,13 @@ differentiate it from test ids."""
         repeat_iteration = 0
 
         # run sets in order
-        while potential_sets:
+        while len(potential_sets) > 0:
 
-            sets_to_run = []  # type: List[TestSet]
+            if self.check_cancelled():
+                return
 
-            # kick off any sets that aren't waiting on any sets to complete
-            for test_set in potential_sets:
-                parent_names = [parent.name for parent in test_set.parent_sets]
-                if all(map(lambda par: par in complete, parent_names)):
-                    sets_to_run.append(test_set)
+            # Separate out sets whose parents have completed running
+            sets_to_run, waiting_sets = partition(attrgetter("parents_complete"), potential_sets)
 
             for test_set in sets_to_run:
                 # Make sure it's ok to run this test set based on parent status.
@@ -447,12 +483,14 @@ differentiate it from test ids."""
                         "Error making tests for series '{}'."
                         .format(self.sid), err)
 
-            for test_set in sets_to_run:
-                potential_sets.remove(test_set)
+            potential_sets = list(waiting_sets)
 
             repeat -= 1
 
-            if not potential_sets and repeat:
+            if self.check_cancelled():
+                return
+
+            if len(potential_sets) == 0 and repeat > 0:
                 # If we're repeating multiple times, reset the test sets for the series
                 # and recreate them to run again.
                 repeat_iteration += 1
@@ -481,6 +519,10 @@ differentiate it from test ids."""
             # Add all the tests we created to this test set.
             self._add_tests(test_batch, test_set.iter_name)
 
+            # Cancel tests if a cancel file has been dropped
+            if self.check_cancelled():
+                return
+
             # Build each test
             try:
                 test_set.build(deprecated_builds, failed_builds)
@@ -495,6 +537,9 @@ differentiate it from test ids."""
 
             if not test_set.ready_to_start:
                 continue
+
+            if self.check_cancelled():
+                return
 
             try:
                 started_tests, new_jobs = test_set.kickoff()
@@ -521,6 +566,7 @@ differentiate it from test ids."""
             _simultaneous = test_set.simultaneous if test_set.simultaneous else self.simultaneous
             # Wait for jobs until enough have finished to start a new batch.
             while tests_running + self.batch_size > _simultaneous:
+                self.check_cancelled()
                 tests_running -= test_set.wait()
 
 
@@ -567,7 +613,7 @@ differentiate it from test ids."""
         return SeriesInfo(self.pav_cfg, self.path)
 
     @property
-    def pgid(self) -> Union[int, None]:
+    def pgid(self) -> Optional[int]:
         """Returns pgid of series if it exists, None otherwise."""
 
         if self._pgid is None:

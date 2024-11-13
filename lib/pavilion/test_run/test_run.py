@@ -2,6 +2,7 @@
 the list of all known test runs."""
 
 # pylint: disable=too-many-lines
+# pylint: disable=W0221
 import copy
 import json
 import logging
@@ -855,8 +856,8 @@ class TestRun(TestAttributes):
         self._complete = True
 
     def cancel(self, reason: str):
-        """Set the cancel file for this test, and denote in its status that it was
-        cancelled."""
+        """Create the cancellation file for the test, and denote in its status that it was
+        cancelled, but do nothing beyond that."""
 
         if self.cancelled or self.complete:
             # Already cancelled.

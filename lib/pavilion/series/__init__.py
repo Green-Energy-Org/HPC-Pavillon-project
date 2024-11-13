@@ -1,7 +1,7 @@
 """Module init for series objects and related functions."""
 
 import json
-from typing import TextIO
+from typing import TextIO, Optional
 
 from pavilion import output
 from pavilion import utils, dir_db
@@ -13,7 +13,7 @@ from .test_set import TestSet
 from .common import COMPLETE_FN, STATUS_FN, get_all_started
 
 
-def load_user_series_id(pav_cfg, errfile=None):
+def load_user_series_id(pav_cfg, errfile=None) -> Optional[str]:
     """Load the last series id used by the current user."""
 
     user = utils.get_login()

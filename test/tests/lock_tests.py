@@ -134,7 +134,7 @@ class TestLocking(PavTestCase):
         errfile = io.StringIO()
         with lockfile.LockFile(self.lock_path, errfile=errfile):
             self.lock_path.unlink()
-        self.assertIn("mysteriously disappeared", errfile.getvalue())
+        self.assertIn("mysteriously disappeared", errfile.getvalue().replace("\n", " "))
 
         dmy_lock = lockfile.LockFile(self.lock_path, expires_after=100)
         dmy_lock._id = 'abcd'
@@ -144,7 +144,7 @@ class TestLocking(PavTestCase):
             dmy_lock._create_lockfile()
         # Remove our bad lockfile
         self.lock_path.unlink()
-        self.assertIn("mysteriously replaced", errfile.getvalue())
+        self.assertIn("mysteriously replaced", errfile.getvalue().replace("\n", " "))
 
     def test_fuzzylock_mutual_exclusion(self):
         # Test that FuzzyLock object correctly excludes concurrent access

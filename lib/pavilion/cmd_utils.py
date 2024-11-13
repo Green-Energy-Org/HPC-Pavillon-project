@@ -8,7 +8,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import List, TextIO, Union
+from typing import List, TextIO, Union, Iterator
 from collections import defaultdict
 
 from pavilion import config
@@ -23,8 +23,60 @@ from pavilion.errors import TestRunError, CommandError, TestSeriesError, \
                             PavilionError, TestGroupError
 from pavilion.test_run import TestRun, load_tests, TestAttributes
 from pavilion.types import ID_Pair
+from pavilion.micro import flatten
 
 LOGGER = logging.getLogger(__name__)
+
+
+def expand_range(test_range: str) -> List[str]:
+    """Expand a given test or series range into a list of the individual
+    tests or series in that range"""
+
+    tests = []
+
+    if test_range == "all":
+        return ["all"]
+
+    elif '-' in test_range:
+        id_start, id_end = test_range.split('-', 1)
+
+        if id_start.startswith('s'):
+            series_range_start = int(id_start.replace('s',''))
+
+            if id_end.startswith('s'):
+                series_range_end = int(id_end.replace('s',''))
+            else:
+                series_range_end = int(id_end)
+
+            series_ids = range(series_range_start, series_range_end+1)
+
+            for sid in series_ids:
+                tests.append('s' + str(sid))
+        else:
+            test_range_start = int(id_start)
+            test_range_end = int(id_end)
+            test_ids = range(test_range_start, test_range_end+1)
+
+            for tid in test_ids:
+                tests.append(str(tid))
+    else:
+        tests.append(test_range)
+
+    return tests
+
+
+def expand_ranges(ranges: Iterator[str]) -> Iterator[str]:
+    """Given a sequence of test and series ranges, expand them
+    into a sequence of individual tests and series."""
+
+    return flatten(map(expand_range, ranges))
+
+
+#pylint: disable=C0103
+def is_series_id(id: str) -> bool:
+    """Determine whether the given ID is a series ID."""
+
+    return len(id) > 0 and id[0].lower() == 's'
 
 
 def load_last_series(pav_cfg, errfile: TextIO) -> Union[series.TestSeries, None]:
@@ -51,7 +103,7 @@ def set_arg_defaults(args):
     args.filter = getattr(args, 'filter', def_filter)
 
 
-def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
+def arg_filtered_tests(pav_cfg: "PavConfig", args: argparse.Namespace,
                        verbose: TextIO = None) -> dir_db.SelectItems:
     """Search for test runs that match based on the argument values in args,
     and return a list of matching test id's.
@@ -63,6 +115,8 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
     1. The interface is well defined, by `filters.add_test_filter_args`.
     2. All of the used bits are *ALWAYS* used, so any errors will pop up
        immediately in unit tests.
+
+    TODO: Rewrite the interface so that it's cleaner and not coupled to argparse. - HW
 
     :param pav_cfg: The Pavilion config.
     :param args: An argument namespace with args defined by
@@ -80,26 +134,10 @@ def arg_filtered_tests(pav_cfg, args: argparse.Namespace,
     sort_by = getattr(args, 'sort_by', 'created')
 
     ids = []
+
     for test_range in args.tests:
-        if '-' in test_range:
-            id_start, id_end = test_range.split('-', 1)
-            if id_start.startswith('s'):
-                series_range_start = int(id_start.replace('s',''))
-                if id_end.startswith('s'):
-                    series_range_end = int(id_end.replace('s',''))
-                else:
-                    series_range_end = int(id_end)
-                series_ids = range(series_range_start, series_range_end+1)
-                for sid in series_ids:
-                    ids.append('s' + str(sid))
-            else:
-                test_range_start = int(id_start)
-                test_range_end = int(id_end)
-                test_ids = range(test_range_start, test_range_end+1)
-                for tid in test_ids:
-                    ids.append(str(tid))
-        else:
-            ids.append(test_range)
+        ids.extend(expand_range(test_range))
+
     args.tests = ids
 
     if 'all' in args.tests:
