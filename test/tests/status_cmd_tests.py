@@ -297,3 +297,16 @@ class StatusCmdTests(PavTestCase):
 
         for i in range(len(output)):
             self.assertTrue(statuses[i].state in output[i])
+
+    def test_status_no_run(self):
+        """Test that the status command behaves properly when invoked before any tests have run."""
+
+        status_cmd = commands.get_command('status')
+        out = io.StringIO()
+        status_cmd.outfile = out
+
+        parser = argparse.ArgumentParser()
+        status_cmd._setup_arguments(parser)
+
+        args = parser.parse_args([])
+        self.assertEqual(status_cmd.run(self.pav_cfg, args), 0)
