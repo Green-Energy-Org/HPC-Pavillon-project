@@ -24,8 +24,8 @@ def load_user_series_id(pav_cfg, errfile=None) -> Optional[str]:
     sys_name = sys_vars['sys_name']
 
     if not last_series_fn.exists():
-        raise TestSeriesError("No known last series for user {} on host {}."
-                              .format(user, sys_name))
+        return None
+
     try:
         with last_series_fn.open() as last_series_file:
             sys_name_series_dict = json.load(last_series_file)
