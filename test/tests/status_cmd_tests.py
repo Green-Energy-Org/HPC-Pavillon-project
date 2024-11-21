@@ -301,12 +301,20 @@ class StatusCmdTests(PavTestCase):
     def test_status_no_run(self):
         """Test that the status command behaves properly when invoked before any tests have run."""
 
+        # Create a temporary empty working directory to simulate a fresh install
+        self.pav_cfg.working_dir = self.pav_cfg.working_dir / "working_dir"
+        self.pav_cfg.working_dir.mkdir()
+
         status_cmd = commands.get_command('status')
-        out = io.StringIO()
-        status_cmd.outfile = out
+        status_cmd.silence()
 
         parser = argparse.ArgumentParser()
         status_cmd._setup_arguments(parser)
 
         args = parser.parse_args([])
-        self.assertEqual(status_cmd.run(self.pav_cfg, args), 0)
+        ret = status_cmd.run(self.pav_cfg, args)
+
+        # Reset working directory for other tests
+        self.pav_cfg.working_dir = self.pav_cfg.working_dir.parent
+
+        self.assertEqual(ret, 0)
