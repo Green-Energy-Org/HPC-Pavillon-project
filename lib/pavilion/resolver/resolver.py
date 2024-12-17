@@ -278,17 +278,21 @@ class TestConfigResolver:
             else:
                 suites[name]['supersedes'].append(path)
 
-            # It's ok if the tests aren't completely validated. They
-            # may have been written to require a real host/mode file.
-            with path.open('r') as suite_file:
-                try:
-                    suite_cfg = self._suite_loader.load(suite_file, partial=True)
-                except (TypeError,
-                        KeyError,
-                        ValueError,
-                        yc_yaml.YAMLError) as err:
-                    suites[name]['err'] = err
-                    continue
+            try:
+                # It's ok if the tests aren't completely validated. They
+                # may have been written to require a real host/mode file.
+                with path.open('r') as suite_file:
+                    try:
+                        suite_cfg = self._suite_loader.load(suite_file, partial=True)
+                    except (TypeError,
+                            KeyError,
+                            ValueError,
+                            yc_yaml.YAMLError) as err:
+                        suites[name]['err'] = err
+                        continue
+            except FileNotFoundError as err:
+                # This can happen in the case of a broken symlink
+                suites[name]["err"] = err
 
             base = self._loader.load_empty()
 
