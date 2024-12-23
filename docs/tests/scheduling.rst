@@ -260,8 +260,8 @@ specific chunk size.
         chunking:
           size: 500
 
-When using chunking nodes are selected for each job entirely in advance by Pavilion. This can lead
-to the tests being a bit more fragile than usual - the failure of a single node can keep a test
+When using chunking, Pavilion selects nodes for each job entirely in advance. This can lead
+to the tests being a bit more fragile than usual: the failure of a single node can keep a test
 from running even if the are 'spare' nodes outside of the chunk.
 
 Chunk Selection
@@ -271,12 +271,12 @@ By default, Pavilion will assign each test to the least used chunk for a given s
 will distribute your tests evenly across the entire system.
 
 You can, however, specify a specific chunk for each test, or even create permutations of a test
-such that it will one once on each chunk. The ``sched.chunk_ids`` scheduler variable contains a
+such that it will run once on each chunk. The ``sched.chunk_ids`` scheduler variable contains a
 list of all available chunks ids for a test, and can be used in combination with the ``chunk``
 setting to specify a chunk.
 
-**Note: It is not generically safe to specify chunks other than chunk '0', as chunks above
-zero aren't guaranteed to exist.**
+**Note: It is not generically safe to specify chunks other than chunk '0', as chunks with indices
+greater than 0 aren't guaranteed to exist.**
 
 .. code-block:: yaml
 
@@ -287,7 +287,8 @@ zero aren't guaranteed to exist.**
 
       chunk: '{{chunk_ids}}'
       schedule:
-        # When using chunking, this is relative to the chunk and not the whole system.
+        # When using chunking, 'all' refers to all nodes in the chunk
+        # rather than on the whole system.
         nodes: all
 
         # Get 500 node chunks
@@ -298,22 +299,24 @@ Node Selection
 ~~~~~~~~~~~~~~
 
 By default, Pavilion selects (near) contiguous blocks of nodes for each chunk, but this is
-customizable. Instead, you can select nodes randomly for each chunk (random), distributed across the
-system (dist), or semi-randomly distributed (rand-dist). Regardless of the node selection method,
+customizable. Instead, you can select nodes randomly for each chunk (``random``), distributed across the
+system (``dist``), or semi-randomly distributed (``rand-dist``). Regardless of the node selection method,
 the number of chunks will be the same and they (mostly) won't overlap.
 
-It is very likely that the chunk size won't align precisely with the number of nodes that are to
-be divided into chunks. These 'extra' nodes may be excluded or back-filled with nodes from another
-chunk (they always come from the second to last chunk). The default is to 'backfill'.
+It is likely that the chunk size won't divide evenly into the total number of nodes. Nodes which make
+up the remainder may be excluded or back-filled with nodes from another chunk (these nodes are always
+drawn from the second to last chunk). The default behavior is to 'backfill'.
 
-These are set via the ``schedule.chunking.node_selection`` and ``schedule.chunking.extra`` options.
+Chunking behavior is set via the ``schedule.chunking.node_selection`` and ``schedule.chunking.extra``
+options.
 
 .. code-block:: yaml
 
     # This test run over a random selection of 25% of the nodes on the system.
     mytest:
       schedule:
-        # When using chunking, this is relative to the chunk and not the whole system.
+        # When using chunking, 'all' refers to all nodes in the chunk
+        # rather than on the whole system.
         nodes: all
 
         # Get 500 node chunks
@@ -344,8 +347,8 @@ wrapper command before actually running the intended command.
                 # It will run `valgrind ./supermagic -a` on the allocation
                 - '{{sched.test_cmd}} ./supermagic -a'
 
-When using the ``raw`` scheduler, the ``{{sched.test_cmd}}`` normally returns an empty string. You can
-use the wrapper setting to control a different scheduler directly.
+When using the ``raw`` scheduler, ``{{sched.test_cmd}}`` normally evaluates to an empty string. You
+can use the wrapper setting to control a different scheduler directly.
 
 .. code-block:: yaml
 
