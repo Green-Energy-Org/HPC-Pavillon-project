@@ -61,13 +61,13 @@ Scheduler Plugin Basics
 
 Scheduler plugins are responsible for the following:
 
-- providing test runs with *scheduler* variables
-- (optionally) writing a kickoff script
-- using that kickoff script (or other mechanisms) to then run `pav _run
-  <test_run_id>` on an allocation with a reasonable environment.
-- Generate a unique scheduler ``job_id`` for the test run.
-- Providing a mechanism to cancel tests.
-- Providing a mechanism to check the test status.
+- Providing test runs with *scheduler* variables
+- (Optionally) writing kickoff scripts
+- Using kickoff scripts (or other mechanisms) to then run `pav _run
+  <test_run_id>` on allocations with reasonable environments
+- Generating a unique scheduler ``job_id`` for each test run
+- Providing mechanisms for canceling tests
+- Providing mechanisms for checking test statuses
 
 .. _tests.scheduling.variables:
 
