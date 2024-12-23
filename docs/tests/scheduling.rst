@@ -39,9 +39,9 @@ You may also notice scheduler specific sections in the listed options as well. T
 allow for custom configuration specific to a particular schedulers - options that are
 not generally applicable.
 
-Note that all options are expected to be generally applicable either. We may, in the future,
-add a scheduler with concept of a QOS setting, for instance. Such settings are simply ignored
-in those cases.
+Note that not all options are expected to be generally applicable either. We may, in the future,
+add a scheduler with concept of a QOS setting, for instance. When a setting is not applicable, it
+is simply ignored.
 
 .. code-block:: yaml
 
