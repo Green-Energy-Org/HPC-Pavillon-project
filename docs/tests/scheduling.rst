@@ -195,7 +195,7 @@ Basic Schedulers don't know anything about the system that isn't manually config
 information is given via the ``schedule.cluster_info`` section (see ``pav show sched --config``).
 This information should generally be set in the host config for a particular system.
 
-Asking for 'all' nodes on a _Basic_ scheduler will result in an allocation for the
+Asking for 'all' nodes on a basic scheduler will result in an allocation for the
 configured number of nodes, regardless of the state of those nodes.
 
 .. code-block:: yaml
