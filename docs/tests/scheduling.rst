@@ -270,10 +270,11 @@ Chunk Selection
 By default, Pavilion will assign each test to the least used chunk for a given set of tests. This
 will distribute your tests evenly across the entire system.
 
-You can, however, specify a specific chunk for each test, or even create permutations of a test
-such that it will run once on each chunk. The ``sched.chunk_ids`` scheduler variable contains a
-list of all available chunks ids for a test, and can be used in combination with the ``chunk``
-setting to specify a chunk.
+It is also possible to choose a specific chunk on which each test will run, or even to create
+permutations of a test such that it will run once on each chunk. The ``sched.chunk_ids`` scheduler
+variable contains a list of all allocated chunk IDs. A common idiom is to use a permutation over
+this list (via ``permute_on``) so that each node's instance of the variable ``chunk`` stores the ID
+of the chunk of which it is a member.
 
 **Note: It is not generically safe to specify chunks other than chunk '0', as chunks with indices
 greater than 0 aren't guaranteed to exist.**
