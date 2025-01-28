@@ -276,16 +276,15 @@ variable contains a list of all allocated chunk IDs. A common idiom is to use a 
 this list (via ``permute_on``) so that each node's instance of the variable ``chunk`` stores the ID
 of the chunk of which it is a member.
 
-**Note: It is not generically safe to specify chunks other than chunk '0', as chunks with indices
-greater than 0 aren't guaranteed to exist.**
-
 .. code-block:: yaml
 
     # This will create an instance of this test for every chunk available, giving
     # full coverage of the system.
     mytest:
+      # Creates separate instance of the test for each chunk.
       permute_on: chunk_ids
 
+      # Each test instance stores the ID of the chunk it belongs to
       chunk: '{{chunk_ids}}'
       schedule:
         # When using chunking, 'all' refers to all nodes in the chunk
@@ -295,6 +294,9 @@ greater than 0 aren't guaranteed to exist.**
         # Get 500 node chunks
         chunking:
           size: 500
+
+**Note: It is not generically safe to specify chunks other than chunk '0', as chunks with indices
+greater than 0 aren't guaranteed to exist.**
 
 Node Selection
 ~~~~~~~~~~~~~~
