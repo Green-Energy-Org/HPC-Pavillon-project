@@ -79,6 +79,7 @@ class ModWrapperTests(PavTestCase):
         preamble.append('export MODULEPATH={}'
                         .format(self.TEST_DATA_ROOT/'modules'))
         test_cfg['run']['preamble'] = preamble
+        test_cfg['build']['preamble'] = preamble
         return test_cfg
 
     SORT_FUNC = '''function sort_mods {
@@ -326,7 +327,7 @@ class ModWrapperTests(PavTestCase):
     def test_run_module_purge(self):
         """Test that a module purge is performed when running tests."""
 
-        # Test that a module purge is performed by default
+        # Test that not module purge is performed by default
         test_cfg = self._quick_test_cfg()
         test_cfg['run']['cmds'] = [
             '[[ $(module -t list 2>&1) = "No modules loaded" ]] || exit 1',
@@ -335,47 +336,48 @@ class ModWrapperTests(PavTestCase):
 
         test = self._quick_test(test_cfg)
 
-        run_result = test.run()
-
-        self.assertEqual(run_result, 0)
-
-        # Check that we can disable purging
-        test_cfg = self._quick_test_cfg()
-        test_cfg['run']['cmds'] = [
-            '[[ $(module -t list 2>&1) = "No modules loaded" ]] || exit 1',
-        ]
-        test_cfg['run']['preamble'].append('module load test_mod1 || exit 2')
-        test_cfg["run"]["purge_modules"] = False
-        test = self._quick_test(test_cfg)
         run_result = test.run()
 
         self.assertEqual(run_result, 1)
+
+        # Check that we can enable purging
+        test_cfg = self._quick_test_cfg()
+        test_cfg['run']['cmds'] = [
+            '[[ $(module -t list 2>&1) = "No modules loaded" ]] || exit 1',
+        ]
+        test_cfg['run']['preamble'].append('module load test_mod1 || exit 2')
+        test_cfg["run"]["purge_modules"] = True
+        test = self._quick_test(test_cfg)
+        run_result = test.run()
+
+        self.assertEqual(run_result, 0)
 
     @unittest.skipIf(not has_module_cmd() and find_module_init() is None,
                      "Could not find a module system.")
     def test_build_module_purge(self):
         """Test that a module purge is performed when building tests."""
 
-        # Test that a module purge is performed by default
+        # Test that no module purge is performed by default
         test_cfg = self._quick_test_cfg()
         test_cfg['build']['cmds'] = [
             '[[ $(module -t list 2>&1) = "No modules loaded" ]] || exit 1',
         ]
-        test_cfg['run']['preamble'].append('module load test_mod1 || exit 2')
+        test_cfg['build']['preamble'].append('module load test_mod1 || exit 2')
 
-        test = self._quick_test(test_cfg, build=False)
-        build_result = test.build()
-
-        self.assertEqual(build_result, True)
-
-        # Check that we can disable purging
-        test_cfg = self._quick_test_cfg()
-        test_cfg['build']['cmds'] = [
-            '[[ $(module -t list 2>&1) = "No modules loaded" ]] || exit 1',
-        ]
-        test_cfg['build']['preamble'] = ['module load test_mod1 || exit 2']
-        test_cfg["build"]["purge_modules"] = False
         test = self._quick_test(test_cfg, build=False)
         build_result = test.build()
 
         self.assertEqual(build_result, False)
+
+        # Check that we can enable purging
+        test_cfg = self._quick_test_cfg()
+        test_cfg['build']['cmds'] = [
+            '[[ $(module -t list 2>&1) = "No modules loaded" ]] || exit 1',
+        ]
+        test_cfg['build']['preamble'].append('module load test_mod1 || exit 2')
+        test_cfg["build"]["purge_modules"] = True
+        test = self._quick_test(test_cfg, build=False)
+
+        build_result = test.build()
+
+        self.assertEqual(build_result, True)
