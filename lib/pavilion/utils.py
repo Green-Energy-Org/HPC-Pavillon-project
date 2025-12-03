@@ -69,6 +69,16 @@ def is_int(val: str):
 
     return True
 
+def is_hash(val: str, hash_len: int) -> bool:
+    """Return true if the given string value is a hexidecimal hash."""
+
+    try:
+        int(val, 16)
+    except ValueError:
+        return False
+
+    return len(val) == hash_len
+
 def str_bool(val):
     """Returns true if the string value is the string 'true' with allowances
     for capitalization."""

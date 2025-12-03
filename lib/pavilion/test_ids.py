@@ -1,19 +1,32 @@
-from typing import Union, Tuple, List, Iterable, Optional
+# pylint: disable=invalid-name
+
+import re
+from typing import Union, Tuple, List, Iterable, Optional, Dict, Any, TextIO
 from abc import ABC, abstractmethod
 
-from pavilion.micro import flatten, unique
-from pavilion.utils import is_int
+from pavilion.utils import is_int, is_hash
+from pavilion.errors import PavilionError
+
+
+HASH_LEN = 32
+
+
+class TestIDError(PavilionError):
+    """Error related to the manipulation and resolution of test IDs."""
 
 
 class ID(ABC):
     """Base class for IDs"""
 
     def __init__(self, id_str: str):
+        if not self.is_valid_id(id_str):
+            raise ValueError(f"Invalid string {id_str} for type {self.__class__.__name__}.")
+
         self.id_str = id_str
 
-    @staticmethod
+    @classmethod
     @abstractmethod
-    def is_valid_id(id_str: str) -> bool:
+    def is_valid_id(cls, id_str: str) -> bool:
         """Determine whether the given string constitutes a valid ID."""
 
         raise NotImplementedError
@@ -21,8 +34,22 @@ class ID(ABC):
     def __str__(self) -> str:
         return self.id_str
 
-    def __eq__(self, other: "ID") -> bool:
-        return self.id_str == other.id_str
+    def __eq__(self, other: Any) -> bool:
+        if not hasattr(other, "id_str"):
+            return False
+
+        return self.id_str.lower() == other.id_str.lower()
+
+    @abstractmethod
+    def __gt__(self, other: "ID") -> bool:
+        raise NotImplementedError
+
+    def __lt__(self, other: "ID") -> bool:
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Incompatible type for comparison with {self.__class__.__name__}: "\
+                            f"{type(other).__name__}.")
+
+        return not (self > other or self == other)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.id_str})"
@@ -34,56 +61,69 @@ class ID(ABC):
 class TestID(ID):
     """Represents a single test ID."""
 
+    def __init__(self, id_str: str):
+        super().__init__(id_str)
+
+        parts = self.id_str.split('.', 1)
+
+        if len(parts) == 2:
+            self.series = SeriesID(parts[0])
+            self.id = int(parts[1])
+        else:
+            self.series = None
+
+            if is_int(parts[0]):
+                self.id = int(parts[0])
+            else:
+                self.id = parts[0]
+
+        self.parts = (self.series, self.id)
+
     @classmethod
     def is_valid_id(cls, id_str: str) -> bool:
         """Determine whether the given string constitutes a valid test ID."""
 
-        test_num = -1
+        if is_hash(id_str, HASH_LEN) or is_int(id_str):
+            return True
 
         if "." in id_str:
-            test_num = int(id_str.split(".")[-1])
-        elif is_int(id_str):
-            test_num = int(id_str)
+            series_id_str, num_str = id_str.split(".", 1)
 
-        return test_num > 0
+            test_num = -1
 
-    def is_int(self) -> bool:
-        """Determine whether the test ID is an integer value."""
+            if is_int(num_str):
+                test_num = int(num_str)
 
-        return is_int(self.id_str)
+            return test_num >= 0 and SeriesID.is_valid_id(series_id_str)
 
-    def as_int(self) -> int:
-        """Convert the test ID into an integer, if possible."""
+        return False
 
-        try:
-            return int(self.id_str)
-        except:
-            raise ValueError(f"Test with ID {self.id_str} cannot be converted to an integer.")
+    def is_absolute(self) -> bool:
+        """Returns true if the ID is absolute (i.e. not series-relative)."""
 
-    @property
-    def parts(self) -> Tuple[str]:
-        """Return a tuple of components of the test ID, where components are separated by
-        periods."""
+        return isinstance(self.id, str)
 
-        return tuple(self.id_str.split('.', 1))
+    def is_relative(self) -> bool:
+        """Returns true if the ID is relative to a particular series."""
 
-    @property
-    def label(self) -> str:
-        """Return the config label component of the test ID."""
+        return not self.is_absolute()
 
-        if len(self.parts) > 1:
-            return self.parts[0]
+    def __gt__(self, other: "TestID") -> bool:
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Incompatible type for comparison with {self.__class__.__name__}: "\
+                            f"{type(other).__name__}.")
 
-        return "main"
-
-    @property
-    def test_num(self) -> Optional[int]:
-        """Return the test number component of the test ID."""
-
-        if self.is_int():
-            return self.as_int()
-        elif len(self.parts) > 1:
-            return int(self.parts[-1])
+        if self.is_absolute() and other.is_absolute():
+            return int(self.id_str, 16) > int(other.id_str, 16)
+        elif self.is_series_relative() and other.is_series_relative():
+            if self.series == other.series:
+                return int(self.id) > int(other.id)
+            else:
+                raise TypeError(f"Cannot compare test IDs {self} and {other} "
+                                "from different series.")
+        else:
+            raise TypeError("Incompatible test ID formats for numerical comparison: "\
+                            "{self} and {other}")
 
 
 class SeriesID(ID):
@@ -93,22 +133,18 @@ class SeriesID(ID):
     def is_valid_id(cls, id_str: str) -> bool:
         """Determine whether the given string constitutes a valid series ID."""
 
-        return cls.is_abstract_id(id_str) or (len(id_str) > 0 and id_str[0] == 's' \
+        return id_str.lower() in ("last", "all") or (len(id_str) > 0 and id_str[0] == 's' \
             and is_int(id_str[1:]) and int(id_str[1:]) > 0)
 
-    @staticmethod
-    def is_abstract_id(id_str: str) -> bool:
-        """Determine whether the given string is an abstract ID, that is, whether it
-        is 'last' or 'all'."""
+    def is_abstract_id(self) -> bool:
+        """Return true if the ID is an abstract ID, that is, whether it is 'last' or 'all'."""
 
-        return id_str.lower() in ("last", "all")
+        return self.all() or self.last()
 
-    @classmethod
-    def is_concrete_id(cls, id_str: str) -> bool:
-        """Determine whether the given string is a concrete ID, that is, whether it
-        is not 'last' or 'all'."""
+    def is_concrete_id(self) -> bool:
+        """Return true if the ID is a concrete ID, that is, whether it is not 'last' or 'all'."""
 
-        return cls.is_valid_id(id_str) and not cls.is_abstract_id(id_str)
+        return not self.is_abstract_id()
 
     def all(self) -> bool:
         """Determine whether the ID is the set of all IDs."""
@@ -120,45 +156,55 @@ class SeriesID(ID):
 
         return self.id_str.lower() == "last"
 
-    def is_int(self) -> bool:
-        """Determine whether the series ID is an integer value."""
-
-        return len(self.id_str) > 0 and is_int(self.id_str[1:])
-
     def as_int(self) -> int:
         """Convert the series ID into an integer, if possible."""
 
-        if self.all() or self.last():
-            raise ValueError(f"Series with ID {self.id_str} cannot be converted to an integer.")
+        if self.is_abstract_id():
+            raise ValueError(f"Abstract series '{self}' cannot be converted to an integer.")
 
         return int(self.id_str[1:])
 
+    @classmethod
+    def from_int(cls, id: int) -> "SeriesID":
+        """Create a new SeriesID from an int."""
 
-class GroupID:
+        return cls(f"s{id}")
+
+    def __gt__(self, other: "SeriesID"):
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Incompatible type for comparison with {self.__class__.__name__}: "\
+                            f"{type(other).__name__}.")
+
+        return self.as_int() > other.as_int()
+
+class GroupID(ID):
     """Represents a single group ID."""
 
-    def __init__(self, id_str: str):
-        self.id_str = id_str
+    GROUP_NAME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_-]+$')
 
-    @staticmethod
-    def is_valid_id(id_str: str) -> bool:
+    @classmethod
+    def is_valid_id(cls, id_str: str) -> bool:
         """Determine whether the given string constitutes a valid group ID."""
-        return len(id_str) > 0 and not (TestID.is_valid_id(id_str) or SeriesID.is_valid_id(id_str))
+        return not (TestID.is_valid_id(id_str) or \
+                    SeriesID.is_valid_id(id_str) or \
+                    TestRange.is_valid_range_str(id_str) or \
+                    SeriesRange.is_valid_range_str(id_str)) and \
+               cls.GROUP_NAME_RE.match(id_str) is not None
 
-    def __str__(self) -> str:
-        return self.id_str
+    def __gt__(self, other: "GroupID") -> bool:
+        if not isinstance(other, self.__class__):
+            raise TypeError(f"Incompatible type for comparison with {self.__class__.__name__}: "\
+                            f"{type(other).__name__}.")
 
-    def __eq__(self, other: "GroupID") -> bool:
-        return self.id_str == other.id_str
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.id_str})"
+        return self.id_str > other.id_str
 
 
 class IDRange(ABC):
     """Represents a contiguous sequence of IDs."""
 
     def __init__(self, start: int, end: int):
+        if start > end:
+            raise ValueError(f"End value {end} must be greater than or equal to {start}.")
         self.start = start
         self.end = end
 
@@ -197,6 +243,9 @@ class IDRange(ABC):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.start}, {self.end})"
+
+    def __len__(self) -> int:
+        return self.end - self.start + 1
 
 
 class TestRange(IDRange):
@@ -276,38 +325,32 @@ class SeriesRange(IDRange):
     def __str__(self) -> str:
         return f"s{self.start}-s{self.end}"
 
-
-def multi_convert(id_str: str) -> Union[List[TestID], List[SeriesID], List[GroupID]]:
-    """Convert a string into a list (possibly a singleton list) of either a TestID, SeriesID,
-    or GroupID as appropriate."""
-
-    if id_str.lower() == "all":
-        return [SeriesID("all")]
-    if id_str.lower() == "last":
-        return [SeriesID("last")]
-
-    if TestRange.is_valid_range_str(id_str):
-        return list(TestRange.from_str(id_str).expand())
-    if SeriesRange.is_valid_range_str(id_str):
-        return list(SeriesRange.from_str(id_str).expand())
-    if TestID.is_valid_id(id_str):
-        return [TestID(id_str)]
-    if SeriesID.is_valid_id(id_str):
-        return [SeriesID(id_str)]
-
-    return [GroupID(id_str)]
-
-
 def resolve_mixed_ids(ids: Iterable[str],
-                      auto_last: bool = True) -> List[Union[TestID, SeriesID, GroupID]]:
+                      auto_last: bool = True) -> Dict[str, List[ID]]:
     """Fully resolve all IDs in the given list into either test IDs, series IDs, or group IDs."""
+
+    id_dict = {"tests": [], "series": [], "groups": []}
 
     ids = list(ids)
 
     if auto_last and len(ids) == 0:
-        return [SeriesID("last")]
+        id_dict["series"].append(SeriesID("last"))
 
     if "all" in ids:
-        return [SeriesID("all")]
+        id_dict["series"].append(SeriesID("all"))
 
-    return list(flatten(map(multi_convert, ids)))
+        return id_dict
+
+    for id_str in ids:
+        if TestID.is_valid_id(id_str):
+            id_dict["tests"].append(TestID(id_str))
+        elif SeriesID.is_valid_id(id_str):
+            id_dict["series"].append(SeriesID(id_str))
+        elif GroupID.is_valid_id(id_str):
+            id_dict["groups"].append(GroupID(id_str))
+        elif TestRange.is_valid_range_str(id_str):
+            id_dict["tests"].extend(TestRange.from_str(id_str).expand())
+        elif SeriesRange.is_valid_range_str(id_str):
+            id_dict["series"].extend(SeriesRange.from_str(id_str).expand())
+
+    return id_dict

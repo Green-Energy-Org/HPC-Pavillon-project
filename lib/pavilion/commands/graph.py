@@ -82,7 +82,7 @@ class GraphCommand(Command):
         filters.add_test_filter_args(parser)
 
         parser.add_argument(
-            'tests', nargs='*', default=[], action='store',
+            'tests', nargs='*', type=TestID, default=[], action='store',
             help='Specific Test Ids to graph. '
         )
         parser.add_argument(
@@ -90,7 +90,7 @@ class GraphCommand(Command):
             help='Desired name of graph when saved to PNG.'
         )
         parser.add_argument(
-            '--exclude', default=[], action='append',
+            '--exclude', type=TestID, default=[], action='append',
             help='Exclude specific Test Ids from the graph.'
         )
         parser.add_argument(
@@ -140,10 +140,15 @@ class GraphCommand(Command):
 
         output.fprint(self.outfile, "Generating Graph...")
 
-        args.tests = resolve_mixed_ids(args.tests, auto_last=True)
-
         # Get filtered Test IDs.
-        test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
+        test_paths = cmd_utils.arg_filtered_tests(
+                                pav_cfg,
+                                args.tests,
+                                [],
+                                filter_query=args.filter,
+                                sort_by=args.sort_by,
+                                limit=args.limit,
+                                verbose=self.errfile).paths
 
         # Load TestRun for all tests, skip those that are to be excluded.
         tests = cmd_utils.get_tests_by_paths(

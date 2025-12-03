@@ -8,7 +8,7 @@ from pavilion import cancel_utils
 from pavilion import cmd_utils
 from pavilion import filters
 from pavilion import output
-from pavilion import series
+from pavilion.series import TestSeries
 from pavilion.errors import TestSeriesError
 from pavilion.test_run import TestRun
 from pavilion.config import PavConfig
@@ -47,23 +47,28 @@ class CancelCommand(Command):
         """Cancel the given tests or series."""
 
         ids = resolve_mixed_ids(args.tests, auto_last=True)
-
-        # Separate out into tests and series
-        series_ids, test_ids = partition(lambda x: isinstance(x, SeriesID), ids)
-
-        args.tests = list(test_ids)
-        args.series = list(series_ids)
+        tests = ids["tests"]
+        series = ids["series"]
 
         test_ret = 0
         sers_ret = 0
 
-        if len(args.tests) > 0:
-            test_paths = cmd_utils.arg_filtered_tests(pav_cfg, args, verbose=self.errfile).paths
+        if len(tests) > 0:
+            test_paths = cmd_utils.arg_filtered_tests(
+                                    pav_cfg,
+                                    tests,
+                                    series,
+                                    filter_query=args.filter,
+                                    limit=args.limit,
+                                    verbose=self.errfile).paths
             tests = cmd_utils.get_tests_by_paths(pav_cfg, test_paths, errfile=self.errfile)
             test_ret = cancel_utils.cancel_tests(pav_cfg, tests, self.outfile)
-        if len(args.series) > 0:
-            sinfos = cmd_utils.arg_filtered_series(pav_cfg, args, verbose=self.errfile)
-            test_series = list(map(lambda x: series.TestSeries.load(pav_cfg, x.sid), sinfos))
+        if len(series) > 0:
+            sinfos = cmd_utils.arg_filtered_series(
+                                pav_cfg,
+                                series,
+                                verbose=self.errfile)
+            test_series = list(map(lambda x: TestSeries.load(pav_cfg, x.id), sinfos))
             sers_ret = cancel_utils.cancel_series(test_series, self.outfile)
 
         return test_ret or sers_ret

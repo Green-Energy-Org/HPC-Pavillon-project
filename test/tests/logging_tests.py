@@ -156,7 +156,7 @@ class LoggingTests(PavTestCase):
         series.log_results()
         log_path = next(iter(series.get_result_paths()), None)
 
-        self.assertEqual(log_path.stem, series.sid)
+        self.assertEqual(log_path.stem, str(series.id))
 
         with open(log_path) as fin:
             results = json.load(fin)
@@ -175,6 +175,7 @@ class LoggingTests(PavTestCase):
         ])
 
         run_cmd = commands.get_command(args.command_name)
+        run_cmd.silence()
 
         self.pav_cfg["result_loggers"] = [{
             "plugin": "common_file",
@@ -183,6 +184,7 @@ class LoggingTests(PavTestCase):
         self.assertEqual(run_cmd.run(self.pav_cfg, args, log_results=False), 0)
 
         series1 = run_cmd.last_series
+
         series1.log_results()
         log_path = next(iter(series1.get_result_paths()), None)
 

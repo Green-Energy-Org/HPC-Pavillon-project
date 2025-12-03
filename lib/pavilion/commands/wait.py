@@ -51,7 +51,7 @@ class WaitCommand(Command):
         )
         parser.add_argument(
             'tests', nargs='*', action='store',
-            help='The name(s) of the tests to check.  These may be any mix of '
+            help='The ID(s) of the tests to check.  These may be any mix of '
                  'test IDs and series IDs.  If no value is provided, the most '
                  'recent series submitted by this user is checked.'
         )
@@ -73,7 +73,11 @@ class WaitCommand(Command):
 
         # get start time
         start_time = time.time()
-        args.tests = resolve_mixed_ids(args.tests, auto_last=True)
+
+        ids = resolve_mixed_ids(args.tests, auto_last=True)
+        args.tests = ids["tests"]
+        args.series = ids["series"]
+
         tests = cmd_utils.get_tests_by_id(pav_cfg, args.tests, self.errfile)
 
         # determine timeout time, if there is one
@@ -93,7 +97,6 @@ class WaitCommand(Command):
 
         done_tests = []
         all_tests = list(tests)
-        all_tests.sort(key=lambda t: t.full_id)
 
         tests = list(tests)
 

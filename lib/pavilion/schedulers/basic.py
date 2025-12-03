@@ -80,7 +80,7 @@ class SchedulerPluginBasic(SchedulerPlugin, ABC):
                 job_share_key = self.gen_job_share_key(sched_config, node_range[0], node_range[1])
             else:
                 # If this scheduler doesn't support concurrency, just put every test in its own bin.
-                job_share_key = test.full_id
+                job_share_key = test.id
 
             job_bins[job_share_key].append(test)
             job_bin_sched_configs[job_share_key] = (node_range, sched_config)
@@ -164,7 +164,7 @@ class SchedulerPluginBasic(SchedulerPlugin, ABC):
                 shebang=tests[0].shebang,
                 isolate=isolate)
 
-        test_ids = ' '.join(test.full_id for test in tests)
+        test_ids = ' '.join(str(test.id) for test in tests)
 
         # This is commented out for consistency with prior behavior and with expected output for
         # logging unit tests. We may want to consider adding it. — HW
