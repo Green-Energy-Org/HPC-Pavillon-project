@@ -100,6 +100,9 @@ class TestRun(TestAttributes):
     BUILD_TEMPLATE_DIR = 'templates'
     """Directory that holds build templates."""
 
+    PAV_LIB_FN = "pav-lib.bash"
+    """Pavilion bash utilities"""
+
     def __init__(self, pav_cfg: PavConfig, config: Dict, var_man: VariableSetManager = None,
                  _id: int = None, rebuild: bool = False, build_only: bool = False):
         """Create an new TestRun object. If loading an existing test
@@ -319,12 +322,12 @@ class TestRun(TestAttributes):
         self.status.set(STATES.CREATED,
                         "Test directory and status file created.")
 
+        header = scriptcomposer.ScriptHeader(shebang=self.shebang)
+        script = scriptcomposer.ScriptComposer(header=header)
+
         if self._build_needed():
-            self._write_script(
-                'build',
-                path=self.build_script_path,
-                config=self.config.get('build', {}),
-                module_wrappers=self.config.get('module_wrappers', {}))
+            script = self.make_script(script, 'build')
+            script.write(self.build_script_path)
 
             self.builder = self._make_builder()
             self.build_name = self.builder.name
@@ -333,11 +336,8 @@ class TestRun(TestAttributes):
             # process of creating and using a builder.
             self._build_trivial()
 
-        self._write_script(
-            'run',
-            path=self.run_tmpl_path,
-            config=self.config.get('run', {}),
-            module_wrappers=self.config.get('module_wrappers', {}))
+        script = self.make_script(script, 'run')
+        script.write(self.run_tmpl_path)
 
         self.save_attributes()
         self.status.set(STATES.CREATED, "Test directory setup complete.")
@@ -521,12 +521,11 @@ class TestRun(TestAttributes):
 
         self.save_attributes()
 
-        self._write_script(
-            'run',
-            self.run_script_path,
-            self.config['run'],
-            self.config.get('module_wrappers', {})
-        )
+        header = scriptcomposer.ScriptHeader(shebang=self.shebang)
+        script = scriptcomposer.ScriptComposer(header=header)
+
+        script = self.make_script(script, 'run')
+        script.write(self.run_script_path)
 
         self.status.set(STATES.FINALIZED, "Test Run Finalized.")
 
@@ -1119,7 +1118,10 @@ be set by the scheduler plugin as soon as it's known."""
                 .format(run_complete_path.as_posix(), err))
             return None
 
-    def _write_script(self, stype: str, path: Path, config: dict, module_wrappers: dict):
+    def make_script(self,
+                     script: scriptcomposer.ScriptComposer,
+                     stype: str,
+                     isolate: bool = False) -> scriptcomposer.ScriptComposer:
         """Write a build or run script or template. The formats for each are
             mostly identical.
         :param stype: The type of script (run or build).
@@ -1128,9 +1130,8 @@ be set by the scheduler plugin as soon as it's known."""
         :param module_wrappers: The module wrappers definition.
         """
 
-        header = scriptcomposer.ScriptHeader(shebang=self.shebang)
-        script = scriptcomposer.ScriptComposer(header=header)
-
+        config = self.config[stype]
+        module_wrappers = self.config.get('module_wrappers', {})
         verbose = config.get('verbose', 'false').lower() == 'true'
 
         if verbose:
@@ -1138,17 +1139,26 @@ be set by the scheduler plugin as soon as it's known."""
             script.command('set -v')
             script.newline()
 
-        pav_lib_bash = self._pav_cfg.pav_root/'bin'/'pav-lib.bash'
-
         script.command(f'echo "(pav) Starting {stype} script"')
+
+        script.newline()
 
         # If we include this directly, it breaks build hashing.
         script.comment('The first (and only) argument of the build script is '
                        'the test id.')
-        script.env_change({
-            'TEST_ID': '${1:-0}',   # Default to test id 0 if one isn't given.
-            'PAV_CONFIG_FILE': self._pav_cfg['pav_cfg_file']
-        })
+
+        env = {'TEST_ID': '${1:-0}'} # Default to test id 0 if one isn't given.
+
+        if not isolate:
+            env["PAV_CONFIG_FILE"] = self._pav_cfg['pav_cfg_file']
+
+        script.env_change(env)
+
+        if isolate:
+            pav_lib_bash = f'$( dirname -- "${{BASH_SOURCE[0]}}" )/{self.PAV_LIB_FN}'
+        else:
+            pav_lib_bash = self._pav_cfg.pav_root / 'bin' / self.PAV_LIB_FN
+
         script.command('source {}'.format(pav_lib_bash))
 
         if config.get('preamble', []):
@@ -1160,6 +1170,7 @@ be set by the scheduler plugin as soon as it's known."""
         if stype == 'build' and not self.build_local:
             script.comment('To be built in an allocation.')
 
+        script.newline()
         script.command(f'echo "(pav) Setting up {stype} environment."')
 
         purge = utils.str_bool(config.get("purge_modules"))
@@ -1191,8 +1202,6 @@ be set by the scheduler plugin as soon as it's known."""
             script.comment('List all the module modules for posterity')
             script.command("module -t list")
             script.newline()
-            script.comment('Output the environment for posterity')
-            script.command("declare -p")
 
         if self.spack_enabled():
             script.command(f'echo "(pav) Setting up Spack."')
@@ -1229,6 +1238,17 @@ be set by the scheduler plugin as soon as it's known."""
                     script.command('spack load {} || exit 1'
                                    .format(package))
 
+        if not isolate:
+            script.newline()
+            script.comment('Output the environment for posterity')
+
+            if verbose:
+                script.command(
+                    f'declare -p | tee > $( dirname -- "${{BASH_SOURCE[0]}}" )/{stype}.env.sh')
+            else:
+                script.command(f'declare -p > $( dirname -- "${{BASH_SOURCE[0]}}" )/{stype}.env.sh')
+
+        script.newline()
         script.command(f'echo "(pav) Executing {stype} commands."')
         script.newline()
         cmds = config.get('cmds', [])
@@ -1244,9 +1264,10 @@ be set by the scheduler plugin as soon as it's known."""
         else:
             script.comment('No commands given for this script.')
 
+        script.newline()
         script.command(f'echo "(pav) Test {stype} commands completed without error."')
 
-        script.write(path)
+        return script
 
     def __repr__(self):
         return "TestRun({s.name}-{s.full_id})".format(s=self)
