@@ -49,6 +49,7 @@ class TestAttributes(Mapping):
 
     serializers = {
         "id": str,
+        "series_rel_id": str,
         "status": lambda s: s.path.as_posix(),
         'suite_path': lambda p: p.as_posix(),
     }
@@ -57,6 +58,7 @@ class TestAttributes(Mapping):
         'created': utils.deserialize_datetime,
         'finished': utils.deserialize_datetime,
         'id': lambda x: TestID(str(x)),
+        'series_rel_id': TestID,
         'started': utils.deserialize_datetime,
         "status": lambda s: TestStatusFile(Path(s)),
         'suite_path': lambda p: Path(p) if p is not None else None,
@@ -163,7 +165,6 @@ class TestAttributes(Mapping):
             'suite_path': None,
             'sys_name':   None,
             'user':       utils.owner(self.path),
-            'uuid':       None,
             'warnings':   [],
         }
 
@@ -362,7 +363,6 @@ class TestAttributes(Mapping):
         name='finished',
         doc="The end time for this test run.")
     id = basic_attr(
-
         name='id',
         doc="The test run id (unique per working_dir at any given time).")
     name = basic_attr(
@@ -374,6 +374,9 @@ class TestAttributes(Mapping):
     skipped = basic_attr(
         name='skipped',
         doc="Did this test's skip conditions evaluate as 'skipped'?")
+    series_rel_id = basic_attr(
+        name="series_rel_id",
+        doc="The test ID relative to its series.")
     started = basic_attr(
         name='started',
         doc="The start time for this test run.")
@@ -390,9 +393,6 @@ class TestAttributes(Mapping):
     user = basic_attr(
         name='user',
         doc="The user who created this test run.")
-    uuid = basic_attr(
-        name='uuid',
-        doc="A completely unique id for this test run (test id's can rotate).")
     warnings = basic_attr(
         name='warnings',
         doc="Non-fatal internal errors in a TestRun."

@@ -106,8 +106,7 @@ class TestRun(TestAttributes):
 
     def __init__(self, pav_cfg: PavConfig, config: Dict[str, Any],
                  var_man: Optional[VariableSetManager] = None, _id: Optional[TestID] = None,
-                 series_id: Optional[SeriesID] = None, rebuild: bool = False,
-                 build_only: bool = False):
+                 rebuild: bool = False, build_only: bool = False):
         """Create an new TestRun object. If loading an existing test
     instance, use the ``TestRun.from_id()`` method.
 
@@ -134,25 +133,20 @@ class TestRun(TestAttributes):
             self.working_dir = Path(config['working_dir'])
 
         tests_path = self.working_dir/self.RUN_DIR
-        series_path = self.working_dir / "series" / series_id if series_id else None
 
         self.config = config
         self._validate_config()
 
         test_uuid = uuid.uuid4().hex
+        series_rel_id = None
 
         # Get an id for the test, if we weren't given one.
         if new_test:
             uuid_path = tests_path / test_uuid
             uuid_path.mkdir()
-            # These will be set by save() or on load.
-            try:
-                if series_path is not None:
-                    _, series_test_path = dir_db.create_id_dir(series_path, link_target=uuid_path)
-            except (OSError, TimeoutError) as err:
-                raise TestRunError("Could not create test id directory at '{}'"
-                                   .format(tests_path), err)
+
             super().__init__(path=uuid_path, load=False)
+
             self.id = TestID(test_uuid)
             self._variables_path = self.path / 'variables'
             self.var_man = None
@@ -198,7 +192,6 @@ class TestRun(TestAttributes):
                 raise TestRunError("Error loading variable set for test {}".format(self.id),
                                    err)
 
-        self.uuid = test_uuid
         self.sys_name = self.var_man.get('sys_name', '<unknown>')
 
         self.test_version = config.get('test_version')
@@ -280,23 +273,17 @@ class TestRun(TestAttributes):
     @property
     def id_pair(self) -> ID_Pair:
         """Returns an ID_pair (a tuple of the working dir and test id)."""
-        return ID_Pair((self.working_dir, self.uuid))
+        return ID_Pair((self.working_dir, self.id))
 
     @property
-    def series(self) -> Union[str, None]:
-        """Return the series id that this test belongs to. Returns None if it doesn't
+    def series(self) -> Optional[SeriesID]:
+        """Return the series ID that this test belongs to. Returns None if it doesn't
         belong to any series."""
 
-        series_path = self.path/'series'
-        if series_path.exists():
-            series = series_path.resolve().name
-            try:
-                series = int(series)
-            except ValueError:
-                return None
-            return 's{}'.format(series)
-        else:
+        if self.series_rel_id is None:
             return None
+
+        return self.series_rel_id.series
 
     def _build_trivial(self) -> None:
         """Skip the actual build step, but create the correct files and directories,
