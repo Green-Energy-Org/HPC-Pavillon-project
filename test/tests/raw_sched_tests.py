@@ -32,7 +32,7 @@ class RawSchedTests(PavTestCase):
             'partition': 'fake-partition',
             'concurrent_default': '100',
             'test_cmd': '',
-            'tasks_per_node': None,
+            'tasks_per_node': '1',
             'min_mem': '1000',
             'chunk_ids': [],
             'node_list': [],
@@ -56,6 +56,7 @@ class RawSchedTests(PavTestCase):
             self.assertIn(key, expected, msg=f"Raw sched var '{key}' does not have a testable value.")
             val = vars[key]
             exp_val = expected[key]
+            print(f"{key}: {val}, {exp_val}")
             if exp_val is None and isinstance(val, DeferredVariable):
                 continue
             self.assertEqual(val, exp_val,
