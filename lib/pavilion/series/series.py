@@ -186,6 +186,9 @@ class TestSeries:
     def get_with_states(self, states: Union[str, List[str]]) -> List[TestRun]:
         """Get a list of tests with states in the given list of states."""
 
+        # If tests were added in another process, we need to search for tests again
+        self.tests.find_tests()
+
         return listfilter(lambda x: x.status.current().state in states, self.tests.values())
 
     def get_currently_running(self) -> List[TestRun]:
@@ -522,8 +525,9 @@ class TestSeries:
 
         # Completion will be set when looked for.
 
-    def log_results(self, loggers: List["ResultLogger"] = None) -> None:
-        """Log the results of each test in the series as tests complete."""
+    def log_results(self, loggers: List["ResultLogger"] = None) -> int:
+        """Log the results of each test in the series as tests complete. Returns the total number
+        of tests logged."""
 
         if loggers is None:
             loggers = self.result_loggers
@@ -541,14 +545,14 @@ class TestSeries:
         while not (self.complete or self.check_cancelled()):
             to_log = set(self.get_completed()) - logged
 
-            output.fprint(self.outfile, f"Found {len(to_log)} completed tests to log.")
+            output.fprint(self.outfile, f"Found {len(to_log)} completed test(s) to log.")
 
             # Apply all loggers to all tests ready to log
 
             try:
                 stardo(log, product(loggers, to_log))
                 logged |= to_log
-                output.fprint(self.outfile, f"Logged {len(to_log)} tests ({len(logged)} total).")
+                output.fprint(self.outfile, f"Logged {len(to_log)} test(s) ({len(logged)} total).")
             except TimeoutError:
                 output.fprint(self.outfile, "Timed out waiting on lock for results log.",
                               color=output.RED)
@@ -564,11 +568,16 @@ class TestSeries:
         # Log any remaining tests after series completion
         to_log = set(self.get_completed()) - logged
 
-        output.fprint(self.outfile, f"Found {len(to_log)} completed tests to log.")
+        output.fprint(self.outfile, f"Found {len(to_log)} remaining test(s) to log.")
 
         stardo(log, product(loggers, to_log))
 
-        output.fprint(self.outfile, "Finished logging results.")
+        logged |= to_log
+
+        output.fprint(self.outfile, f"Finished logging results. "
+                                     "Logged {len(logged)} test(s) total.")
+
+        return len(logged)
 
     def _run_set(self, test_set: TestSet, build_only: bool, rebuild: bool, local_builds_only: bool):
         """Run all requested tests in the given test set."""
