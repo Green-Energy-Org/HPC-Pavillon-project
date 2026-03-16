@@ -10,6 +10,7 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import List, Union, Dict, Any, TextIO, Pattern, Tuple, NewType
 
+from pavilion.config import PavConfig
 from pavilion.result_parsers import ResultParser, get_plugin
 from pavilion.utils import IndentedLog
 from .base import RESULT_ERRORS
@@ -62,16 +63,22 @@ DEFAULT_KEY = '_defaults'
 
 class KeySet:
     """Everything needed to parse a result key from a file."""
-    def __init__(self, parser_name: str, key: str, config: dict):
+    def __init__(self, parser_name: str, key: str, config: dict, working_dir: Path):
         self.parser_name = parser_name
         self.key = key
         self.config = config
+        self.working_dir = working_dir
 
 
-ProcessFileArgs = NewType('ProcessFileArgs', Tuple[Path, List[KeySet]])
+ProcessFileArgs = NewType('ProcessFileArgs', Tuple[Path, Path, List[KeySet]])
 
+BUILD_DIR = "build"
 
-def parse_results(pav_cfg, test, results: Dict, base_log: IndentedLog) -> None:
+def parse_results(
+                pav_cfg: PavConfig,
+                test: "TestRun",
+                results: Dict,
+                base_log: IndentedLog) -> None:
     """Parse the results of the given test using all the result parsers
 configured for that test.
 
@@ -121,10 +128,17 @@ configured for that test.
             per_file[key] = rconf['per_file']
             actions[key] = rconf['action']
 
+            working_dir = rconf.get("working_dir", ".")
+
+            if not working_dir.startswith("/"):
+                working_dir = (test.path / BUILD_DIR / working_dir).resolve()
+            else:
+                working_dir = Path(working_dir)
+
             for file_glob in rconf['files']:
                 base_glob = file_glob
                 if not file_glob.startswith('/'):
-                    file_glob = '{}/build/{}'.format(test.path, file_glob)
+                    file_glob = '{}/{}/{}'.format(test.path, BUILD_DIR, file_glob)
 
                 paths_found = glob.glob(file_glob)
                 # Globbing returns the paths in a backwards order
@@ -137,7 +151,7 @@ configured for that test.
                         file_order[key].append(path)
                         # Add our argument set for this file, so we can process all
                         # keys for a given file together.
-                        file_key_sets[path].append(KeySet(parser_name, key, rconf))
+                        file_key_sets[path].append(KeySet(parser_name, key, rconf, working_dir))
 
                 if not paths_found:
                     log("Setting a non match result for unmatched glob '{}'"
@@ -227,7 +241,7 @@ class ProcessedKey:
         self.value = value
 
 
-def process_file(args: Tuple[Path, List[KeySet]]) -> \
+def process_file(args: Tuple[Path, Path, List[KeySet]]) -> \
         Tuple[List[ProcessedKey], IndentedLog]:
     """Given a file and list of Key/Parser items, parse the file for each
     key. Returns the list of results as a (key, file, value) tuple, and the log data."""
@@ -256,7 +270,12 @@ def process_file(args: Tuple[Path, List[KeySet]]) -> \
             file.seek(0)
 
             # Get the result for a single key and file.
-            result, rlog = parse_result(key_set.key, key_set.config, file, parser)
+            result, rlog = parse_result(
+                                    key_set.key,
+                                    key_set.config,
+                                    key_set.working_dir,
+                                    file,
+                                    parser)
             log.indent(rlog)
 
             if isinstance(result, ParseErrorMsg):
@@ -270,12 +289,13 @@ def process_file(args: Tuple[Path, List[KeySet]]) -> \
     return file_results, log
 
 
-def parse_result(key: str, parser_cfg: Dict, file: TextIO, parser: ResultParser) \
-        -> Tuple[Union[ParseErrorMsg, str], IndentedLog]:
+def parse_result(key: str, parser_cfg: Dict, working_dir: Path, file: TextIO,
+                 parser: ResultParser) -> Tuple[Union[ParseErrorMsg, str], IndentedLog]:
     """Use a result parser and it's settings to parse a single value from a file.
 
     :param key: The key we're parsing.
     :param parser_cfg: The parser config dict.
+    :param working_dir: The directory from which to run the parser.
     :param file: The file from which to extract the result.
     :param parser: The result parser plugin object.
     :returns: The parsed value
@@ -310,6 +330,10 @@ def parse_result(key: str, parser_cfg: Dict, file: TextIO, parser: ResultParser)
     except ResultError as err:
         return ParseErrorMsg(parser, err.args[0], key), log
 
+    # Only pass the working directory if the parser accepts it as an argument.
+    if "working_dir" in inspect.signature(parser.__call__).parameters:
+        stripped_cfg["working_dir"] = working_dir
+
     try:
         res, elog = extract_result(
             file=file,
@@ -343,6 +367,12 @@ def extract_result(file: TextIO, parser: ResultParser, parser_args: dict,
                    pos_regexes: List[Pattern]) -> Tuple[Any, IndentedLog]:
     """Parse a result from a result file.
 
+    :param working_dir: The directory from which to run the result parser.
+    :param file: The file on which to run the result parser.
+    :param parser: The specific parser to run.
+    :param parser_args: Arguments to the parser.
+    :param match_idx: Number of matches to stop at.
+    :param pos_regexes: Regex for position to start matching at.
     :return: A list of all matching results found. Will be cut short if
         we only need the first result.
     """

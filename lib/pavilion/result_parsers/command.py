@@ -1,6 +1,7 @@
 """Execute a command and get its output or return value."""
 import subprocess
-from typing import Tuple
+from pathlib import Path
+from typing import Tuple, Optional
 
 import yaml_config as yc
 from pavilion import errors
@@ -31,21 +32,32 @@ class Command(base_classes.ResultParser):
                 yc.StrElem(
                     'stderr_dest',
                     help_text="Where to redirect stderr."
-                )
+                ),
+                yc.StrElem(
+                    "working_dir",
+                    help_text="Directory from which the result parser will run. "
+                        "By default, the test's build directory. If a relative path is given, "
+                        "it will be relative to the test's build directory."
+                ),
             ],
             validators={
                 'output_type': ('return_value', 'stdout'),
                 'stderr_dest': ('null', 'stdout'),
+                'working_dir': working_dir_validator,
             },
             defaults={
                 'output_type': 'return_value',
                 'stderr_dest': 'stdout',
+                'working_dir': '.',
             }
         )
 
     # pylint: disable=arguments-differ
-    def __call__(self, file, command=None, output_type=None,
-                 stderr_dest=None) -> Tuple[int, IndentedLog]:
+    def __call__(self, file: Path,
+                 command: Optional[str] = None,
+                 output_type: Optional[str] = None,
+                 stderr_dest: Optional[str] = None,
+                 working_dir: Path = None) -> Tuple[int, IndentedLog]:
 
         log = IndentedLog()
 
@@ -61,7 +73,8 @@ class Command(base_classes.ResultParser):
                 shell=True,
                 stdout=subprocess.PIPE,
                 stderr=err,
-                encoding="utf-8"
+                encoding="utf-8",
+                cwd=working_dir
             )
         except subprocess.CalledProcessError as err:
             raise errors.ResultError(
@@ -74,3 +87,15 @@ class Command(base_classes.ResultParser):
             return out, log
         else:
             return proc.returncode, log
+
+
+def working_dir_validator(working_dir: str) -> None:
+    """Validate working directory."""
+
+    try:
+        Path(working_dir).resolve()
+    except (OSError, TypeError):
+        raise ValueError(f"Invalid path: {working_dir}.")
+
+    if not Path(working_dir).is_dir():
+        raise ValueError(f"Not a directory: {working_dir}.")
