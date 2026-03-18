@@ -116,8 +116,6 @@ class SeriesTests(PavTestCase):
         test_series_obj.run()
         test_series_obj.wait(timeout=10)
 
-        last_ended = None
-
         durations = []
 
         for test_id in test_series_obj.tests:
@@ -126,7 +124,10 @@ class SeriesTests(PavTestCase):
             ended = test_obj.results['finished']
             durations.append((started, ended))
 
-            self.assertFalse(durations_overlap(durations))
+        self.assertFalse(
+            durations_overlap(durations),
+            msg="Tests ran simultaneously when they should have been run sequentially. "
+                "Durations: {}".format(sorted(durations)))
 
     def test_series_test_set_simultaneous(self):
         """Test to see if simultaneous in the test_set overrides the simultaneous at full series"""
@@ -155,7 +156,10 @@ class SeriesTests(PavTestCase):
             ended = test_obj.results['finished']
             durations.append((started, ended))
 
-            self.assertFalse(durations_overlap(durations))
+        self.assertFalse(
+                    durations_overlap(durations),
+                    msg="Tests ran simultaneously when they should have been run sequentially. "
+                        "Durations: {}".format(sorted(durations)))
 
     def test_series_modes(self):
         """Test if modes and host are applied correctly."""

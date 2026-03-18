@@ -9,14 +9,15 @@ from pathlib import Path
 from typing import List
 
 import pavilion.deferred
-from pavilion import lockfile as _lockfile
 from pavilion import utils
+from pavilion.timing import RateLimiter
 from ..result_parsers import base_classes
 from .base import base_results, BASE_RESULTS, RESULT_ERRORS
 from .evaluations import check_expression, evaluate_results
 from ..errors import StringParserError, ResultError
 from .parse import parse_results, DEFAULT_KEY
 
+from flufl.lock import Lock
 
 def check_config(parser_conf, evaluate_conf):
     """Make sure the result config is sensible, both for result parsers and
@@ -117,12 +118,14 @@ def prune_result_log(log_path: Path, ids: List[str]) -> List[dict]:
     rewrite_log_path = log_path.with_suffix('.rewrite')
     lockfile_path = log_path.with_suffix(log_path.suffix + '.lock')
 
-    with _lockfile.LockFile(lockfile_path) as lock, \
+    with Lock(lockfile_path, lifetime=3) as lock, \
          log_path.open() as result_log, \
             rewrite_log_path.open('w') as rewrite_log:
 
+        refresh_limiter = RateLimiter(lock.refresh, cooldown=0.3)
+
         for line in result_log:
-            lock.renew(rate_limit=True)
+            refresh_limiter()
             try:
                 result = json.loads(line)
             except json.JSONDecodeError:
