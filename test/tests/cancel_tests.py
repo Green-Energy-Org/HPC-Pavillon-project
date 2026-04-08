@@ -41,7 +41,7 @@ class CancelTests(unittest.PavTestCase):
                       f"{self.testrun_start_timeout} seconds.")
 
         jobs = cancel_utils.cancel_jobs(self.pav_cfg, [test1, test2])
-        self.assertEqual(test2.status.current().state, STATES.RUNNING)
+        self.assertEqual(test2.status.current().state, STATES.RUNNING, msg=f"Test {test2.id} does not have state 'RUNNING'.")
         self.assertTrue(test1.cancelled)
         self.assertFalse(jobs[0]['success'])
 
