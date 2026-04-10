@@ -18,7 +18,6 @@ jobs:
       REMOTE: origin
       STAGING_BRANCH: ci/sync-stable-to-develop
 
-
     steps:
       - name: Checkout Pavilion repository
         uses: actions/checkout@v6
