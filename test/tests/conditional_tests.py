@@ -4,6 +4,11 @@ from pavilion.errors import TestRunError
 
 class conditionalTest(unittest.PavTestCase):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.link_files("plugins/sys/dumb*")
+
     def test_no_skip(self):  # this method runs some conditional successes
         test_list = []
         base_cfg = self._quick_test_cfg()

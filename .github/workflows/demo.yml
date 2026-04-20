@@ -48,9 +48,25 @@ jobs:
     - name: Install dependencies
       run: sudo apt install gcc
 
-    - name: Run demo tests and makes sure they pass
+    - name: Run demo tests
       run: |
         source examples/demo/activate.sh
         pav run -v QUIET demo advanced buildit
         pav wait
         pav results --all-passed
+
+    - name: Zip working directory
+      if: failure()
+      run: |
+        # If we don't zip this ourselves, it will run infinitely due to
+        # symlink loops.
+        cd examples/demo
+        ../../test/utils/make_symlinks_relative working_dir
+        zip -yr demo_working_dir.zip working_dir
+
+    - name: Upload working directory
+      if: failure()
+      uses: actions/upload-artifact@v6
+      with:
+        name: demo_working_directory
+        path: examples/demo/demo_working_dir.zip

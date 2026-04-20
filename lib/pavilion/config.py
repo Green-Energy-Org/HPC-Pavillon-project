@@ -11,7 +11,7 @@ import stat
 from collections import OrderedDict
 from operator import itemgetter
 from pathlib import Path
-from typing import List, Union, Dict, NewType, Iterator, Tuple
+from typing import List, Union, Dict, NewType, Iterator, Tuple, Optional
 
 import yaml_config as yc
 from pavilion import errors
@@ -203,6 +203,7 @@ class PavConfig(PavConfigDict):
         self.log_level: str = 'info'
         self.result_log: OptPath = None
         self.result_loggers: List[Dict] = []
+        self.result_logger_timeout: Optional[int] = None
         self.flatten_results: bool = True
         self.exception_log: OptPath = None
         self.wget_timeout: int = 5
@@ -251,8 +252,9 @@ class PavConfig(PavConfigDict):
 
     @property
     def suite_info(self) -> List[Tuple[str, str, Path]]:
-        """Get the label, name, and path for every suite the config
-        knows about."""
+        """Get the label, name, and path for every suite the config knows about. If the suite
+        uses a suite directory structure, the path with be the directory itself. Otherwise,
+        the path with be the suite config file."""
 
         suite_infos = []
 
@@ -283,7 +285,7 @@ class PavConfig(PavConfigDict):
                 names = [suite.parent.name for suite in suites]
                 labels = [label] * len(suites)
 
-                suite_infos.extend(zip(labels, names, suites))
+                suite_infos.extend(zip(labels, names, (suite.parent for suite in suites)))
 
         # pylint: disable=attribute-defined-outside-init
         self._suite_info = suite_infos
@@ -406,6 +408,8 @@ class PavilionConfigLoader(yc.YamlConfigLoader):
     format and options. If you're looking to add an option to the general
     pavilion.yaml format, this is the place to do it."""
 
+    DEFAULT_RESULT_LOGGER_TIMEOUT = 60 * 60
+
     type = PavConfig
 
     # Each and every configuration element needs to either not be required,
@@ -484,7 +488,8 @@ class PavilionConfigLoader(yc.YamlConfigLoader):
             # given.
             help_text="Results are put in both the general log and a specific "
                       "results log. This defaults to 'results.log' in the default "
-                      "working directory."),
+                      "working directory. This setting is deprecated in favor of "
+                      "result loggers."),
         yc.BoolElem(
             "flatten_results", default=True,
             help_text="Flatten results with multiple 'per_file' values into "
@@ -525,6 +530,12 @@ class PavilionConfigLoader(yc.YamlConfigLoader):
         yc.ListElem(
             'result_loggers', sub_elem=yc.CategoryElem(sub_elem=yc.StrElem()),
             help_text="The list of result loggers and their corresponding parameters."
+        ),
+        yc.IntRangeElem(
+            "result_logger_timeout", default=DEFAULT_RESULT_LOGGER_TIMEOUT, vmin=1,
+            help_text="Timeout value, in seconds, after which result logger processes will "
+                      "terminate if no new tests complete. Defaults to "
+                      f"{DEFAULT_RESULT_LOGGER_TIMEOUT}."
         ),
 
         # The following configuration items are for internal use and provide a

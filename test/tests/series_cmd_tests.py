@@ -12,10 +12,19 @@ from pavilion.unittest import PavTestCase
 
 class SeriesCmdTests(PavTestCase):
 
-    def setUp(self):
-        plugins.initialize_plugins(self.pav_cfg)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def tearDown(self):
+        self.link_files(
+                    "suites/hello_world.yaml",
+                    "suites/sleepy.yaml",
+                    "series/basic.yaml",
+                    "series/sleepy.yaml",
+                    "series/multi.yaml",
+                    "modes/smode1.yaml",
+                    "plugins/schedulers/dummy.*")
+
+    def tear_down(self):
         plugins._reset_plugins()
 
     def test_run_series(self):
@@ -149,12 +158,16 @@ class SeriesCmdTests(PavTestCase):
         arg_parser = arguments.get_parser()
 
         args = arg_parser.parse_args(['series', 'run', 'multi'])
-        self.assertEqual(series_cmd.run(self.pav_cfg, args), 0)
+
+        self.assertEqual(series_cmd.run(self.pav_cfg, args), 0,
+                         msg=f"pav series run multi failed with the following output: {series_cmd.errfile.getvalue()}")
+
+        last_series = series_cmd.last_run_series
 
         try:
-            series_cmd.last_run_series.wait(timeout=self.series_wait_timeout)
+            last_series.wait(timeout=self.series_wait_timeout)
         except TimeoutError:
-            self.fail("Timed out waiting for series to complete after "
+            self.fail(f"Timed out waiting for series {last_series.id} to complete after "
                       f"{self.series_wait_timeout} seconds.")
 
         sid = str(series_cmd.last_run_series.id)

@@ -15,6 +15,11 @@ from pavilion.unittest import PavTestCase
 class SchedTests(PavTestCase):
     """Assorted tests to apply across all scheduler plugins."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.link_files("plugins/schedulers/dummy.*")
+
     def test_check_examples(self):
         """Make sure scheduler examples are up-to-date."""
 
@@ -600,10 +605,14 @@ class SchedTests(PavTestCase):
             dummy.schedule_tests(self.pav_cfg, [test, test2])
 
             try:
-                test.wait(self.testrun_wait_timeout)
-                test2.wait(self.testrun_wait_timeout)
+                test.wait(timeout=self.testrun_wait_timeout)
             except TimeoutError:
-                self.fail(f"Timed out waiting for test to complete after {self.testrun_wait_timeout} seconds.")
+                self.fail(f"Timed out waiting for test {test.id} to complete after {self.testrun_wait_timeout} seconds.")
+
+            try:
+                test2.wait(timeout=self.testrun_wait_timeout)
+            except TimeoutError:
+                self.fail(f"Timed out waiting for test {test2.id} to complete after {self.testrun_wait_timeout} seconds.")
 
             self.assertIn("tasks: 21", (test.path/'run.log').open().read())
 
@@ -631,7 +640,7 @@ class SchedTests(PavTestCase):
         try:
             test.wait(self.testrun_wait_timeout)
         except TimeoutError:
-            self.fail(f"Timed out waiting for test to complete after {self.testrun_wait_timeout} seconds.")
+            self.fail(f"Timed out waiting for test {test.id} to complete after {self.testrun_wait_timeout} seconds.")
 
         # Check if it actually echoed to log
         with (test.path/'run.log').open('r') as runlog:

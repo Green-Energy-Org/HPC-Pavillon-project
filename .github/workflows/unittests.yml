@@ -52,12 +52,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r test/requirements.txt
 
-      - name: Create Pavilion application-level config
-        run: |
-          ln -s pavilion.yaml.ci test/data/pav_config_dir/pavilion.yaml
-          echo "working_dir: $(pwd)/test/working_dir" >> test/data/pav_config_dir/pavilion.yaml
-          echo "spack_path: $(pwd)/test/spack" >> test/data/pav_config_dir/pavilion.yaml
-
       - name: Run style tests
         run: ./test/run_tests -q -o style -o debug_prints
 
@@ -79,12 +73,6 @@ jobs:
         run: |
           pip install -r test/requirements.txt
           pip install -r docs/requirements.txt
-
-      - name: Create Pavilion application-level config
-        run: |
-          ln -s pavilion.yaml.ci test/data/pav_config_dir/pavilion.yaml
-          echo "working_dir: $(pwd)/test/working_dir" >> test/data/pav_config_dir/pavilion.yaml
-          echo "spack_path: $(pwd)/test/spack" >> test/data/pav_config_dir/pavilion.yaml
 
       - name: Run documentation tests
         run: ./test/run_tests -o 'doc*' -q
@@ -115,30 +103,26 @@ jobs:
             pip install -r test/requirements.txt
             pip install -r docs/requirements.txt
 
-      - name: Create Pavilion application-level config
-        run: |
-          ln -s pavilion.yaml.ci test/data/pav_config_dir/pavilion.yaml
-          echo "working_dir: $(pwd)/test/working_dir" >> test/data/pav_config_dir/pavilion.yaml
-          echo "spack_path: $(pwd)/test/spack" >> test/data/pav_config_dir/pavilion.yaml
-          ./test/utils/spack_setup test
+      - name: Setup Spack
+        run: ./test/utils/spack_setup test
 
       - name: Run unit tests
         run: ./test/run_tests
 
-      - name: Zip working directory
+      - name: Zip output directory
         if: failure()
         run: |
           # If we don't zip this ourselves, it will run infinitely due to symlink loops.
           cd test
-          ./utils/make_symlinks_relative working_dir
-          zip -yr working_dir.zip working_dir
+          ./utils/make_symlinks_relative output
+          zip -yr output.zip output
 
-      - name: Upload working directory
+      - name: Upload output directory
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: working_dir_py${{ matrix.python }}
-          path: test/working_dir.zip
+          name: output_py${{ matrix.python }}
+          path: test/output.zip
 
   unittests-legacy-python:
     # We run this as a separate job because older versions of Python which are no longer supported
@@ -168,12 +152,8 @@ jobs:
         # This is necessary because Pavilion's default shebang is /usr/bin/bash
         run: test -e /usr/bin/bash || ln -s /bin/bash /usr/bin/bash
 
-      - name: Create Pavilion application-level config
-        run: |
-          ln -s pavilion.yaml.ci test/data/pav_config_dir/pavilion.yaml
-          echo "working_dir: $(pwd)/test/working_dir" >> test/data/pav_config_dir/pavilion.yaml
-          echo "spack_path: $(pwd)/test/spack" >> test/data/pav_config_dir/pavilion.yaml
-          ./test/utils/spack_setup test
+      - name: Setup Spack
+        run: ./test/utils/spack_setup test
 
       - name: Run unit tests
         run: ./test/run_tests
@@ -184,17 +164,17 @@ jobs:
           apt-get update
           apt-get install -y zip
 
-      - name: Zip working directory
+      - name: Zip output directory
         if: failure()
         run: |
           # If we don't zip this ourselves, it will run infinitely due to symlink loops.
           cd test
-          ./utils/make_symlinks_relative working_dir
-          zip -yr working_dir.zip working_dir
+          ./utils/make_symlinks_relative output
+          zip -yr output.zip output
 
-      - name: Upload working directory
+      - name: Upload output directory
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: working_dir_py${{ matrix.python }}
-          path: test/working_dir.zip
+          name: output_py${{ matrix.python }}
+          path: test/output.zip

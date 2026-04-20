@@ -23,10 +23,27 @@ def durations_overlap(durations):
 
 class SeriesTests(PavTestCase):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.link_files(
+            "suites/hello_world.yaml",
+            "suites/pass_fail.yaml",
+            "suites/echo_test.yaml",
+            "suites/sched_errors.yaml",
+            "suites/invalid*.yaml",
+            "suites/missing_key_collect.yaml",
+            "suites/test_set_errors.yaml",
+            "suites/conditional.yaml",
+            "platforms/that.yaml",
+            "hosts/this.yaml",
+            "modes/smode*.yaml",
+            "series/order.yaml")
+
     def test_init(self):
         """Check initialization of the series object."""
 
-        ignore_keys = ('outfile', 'cancel_limiter', 'result_loggers', 'test_id_counter')
+        ignore_keys = ('outfile', 'errfile', 'cancel_limiter', 'result_loggers', 'test_id_counter')
 
         # Initialize from scratch
         series1 = series.TestSeries(

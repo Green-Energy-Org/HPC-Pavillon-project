@@ -15,6 +15,7 @@ import threading
 import time
 import uuid
 import os
+import signal
 from pathlib import Path
 from typing import Any, TextIO, Union, Dict, Optional, List
 import yc_yaml as yaml
@@ -85,6 +86,8 @@ class TestRun(TestAttributes):
     """
 
     RUN_DIR = 'test_runs'
+
+    SERIES_DIR = "series"
 
     NO_LABEL = '_none'
 
@@ -418,17 +421,7 @@ class TestRun(TestAttributes):
         return ID_Pair((pav_cfg.working_dir, test_id))
 
     @classmethod
-    def load_from_raw_id(cls, pav_cfg: PavConfig, raw_test_id: TestID) -> 'TestRun':
-        """Load a test given a raw test id string, in the form
-        [label].test_id. The optional label will allow us to look up the config
-        path for the test."""
-
-        working_dir, test_id = cls.parse_raw_id(pav_cfg, raw_test_id)
-
-        return cls.load(pav_cfg, working_dir, test_id)
-
-    @classmethod
-    def load(cls, pav_cfg, working_dir: Path, test_id: TestID) -> 'TestRun':
+    def load(cls, pav_cfg: PavConfig, test_id: TestID) -> 'TestRun':
         """Load an old TestRun object given a test id.
 
         :param pav_cfg: The pavilion config
@@ -437,7 +430,13 @@ class TestRun(TestAttributes):
         :rtype: TestRun
         """
 
-        path = working_dir / cls.RUN_DIR / str(test_id)
+        if test_id.is_relative():
+            # Use the series directory's symlink to the test, so we don't have to worry about which
+            # config directory it's in
+            path = (pav_cfg.working_dir / cls.SERIES_DIR / str(test_id.series.as_int()) /
+                    cls.RUN_DIR / str(test_id))
+        else:
+            path = pav_cfg.working_dir / cls.RUN_DIR / str(test_id)
 
         if not path.is_dir():
             raise TestRunError("Test directory for test id {} does not exist "
@@ -743,8 +742,10 @@ class TestRun(TestAttributes):
             cmd = [self.run_script_path.as_posix(), str(self.id)]
             proc = subprocess.Popen(cmd,
                                     cwd=run_wd,
+                                    preexec_fn=os.setsid,
                                     stdout=run_log,
-                                    stderr=subprocess.STDOUT)
+                                    stderr=subprocess.STDOUT,
+                                    stdin=subprocess.DEVNULL)
 
             self.status.set(STATES.RUNNING,
                             "Currently running.")
@@ -775,7 +776,7 @@ class TestRun(TestAttributes):
                     if self.run_timeout is not None:
                         if self.run_timeout < quiet_time:
                             # Give up on the build, and call it a failure.
-                            proc.kill()
+                            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                             msg = ("Run timed out after {} seconds"
                                    .format(self.run_timeout))
                             self.status.set(STATES.RUN_TIMEOUT, msg)
@@ -783,7 +784,7 @@ class TestRun(TestAttributes):
                             self.save_attributes()
                             raise TimeoutError(msg)
                         elif self.cancelled:
-                            proc.kill()
+                            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                             self.status.set(
                                 STATES.SCHED_CANCELLED,
                                 "Test cancelled mid-run.")
@@ -1319,6 +1320,30 @@ be set by the scheduler plugin as soon as it's known."""
         try:
             shutil.rmtree(self.path.as_posix())
         except OSError:
+            return False
+
+        return True
+
+    def last_active(self) -> Optional[float]:
+        """Get the time at which the test was most recently active, as indicated by its logs
+        and status file. Returns None if the last active time cannot be determined."""
+
+        try:
+            return max(self.build_log.stat().st_mtime,
+                       self.run_log.stat().st_mtime,
+                       self.status.last_updated())
+        except OSError:
+            return None
+
+    def is_active(self, timeout: int) -> Optional[bool]:
+        """Determines whether the test is still active, based on the given timeout."""
+
+        last_active = self.last_active()
+
+        if last_active is None:
+            return None
+
+        if time.time() - last_active > timeout:
             return False
 
         return True
