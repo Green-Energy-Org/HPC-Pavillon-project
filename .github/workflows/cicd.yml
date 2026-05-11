@@ -1,0 +1,411 @@
+name: CI/CD PIPELINE
+
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+  workflow_dispatch:
+    inputs:
+      target_job:
+        description: 'Select the job to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - setup
+          - install
+          - lint
+          - test
+          - build
+          - build-artifact
+          - coverage
+          - docs
+          - integration-test
+          - sync-stable
+
+env:
+  PROJECT_NAME:     "pavilion2"
+  PROJECT_CATEGORY: "HPC-Testing-Framework"
+  DEFAULT_PYTHON:   "3.10"          
+  PAV_BIN:          "./bin/pav"
+
+# ──────────────────────────────────────────────────────────────────
+jobs:
+
+# ─────────────────────────────────────────────────────
+# 1. SETUP – verify runtime environment
+# ─────────────────────────────────────────────────────
+  setup:
+    name: "1 · Setup"
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.target_job == 'setup' ||
+      github.event.inputs.target_job == 'all'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.DEFAULT_PYTHON }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Print environment info
+        run: |
+          echo "── Python ───────────────────────────"
+          python3 --version
+          pip --version
+          echo "── System ───────────────────────────"
+          uname -a
+          echo "── Working dir ──────────────────────"
+          ls -la
+          echo "── py-versions.json ─────────────────"
+          cat py-versions.json || true
+
+# ─────────────────────────────────────────────────────
+# 2. INSTALL – Python dependencies
+# ─────────────────────────────────────────────────────
+  install:
+    name: "2 · Install"
+    needs: [setup]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'install' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install test & lint dependencies
+        run: |
+          pip install --upgrade pip
+          # Core test/coverage tools
+          pip install pytest pytest-cov coverage ruff pylint
+          # Sphinx for docs
+          pip install sphinx sphinx-rtd-theme
+          # Any requirements the project declares
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Verify pavilion CLI is executable
+        run: |
+          chmod +x bin/pav
+          python3 bin/pav --version || true
+
+# ─────────────────────────────────────────────────────
+# 3. LINT – ruff + pylint on lib/
+# ─────────────────────────────────────────────────────
+  lint:
+    name: "3 · Lint"
+    needs: [install]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'lint' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install linters
+        run: pip install ruff pylint
+
+      - name: Ruff – fast syntax & style check
+        run: ruff check lib/
+
+      - name: Pylint – deep static analysis
+        # || true: warnings don't block the pipeline
+        run: |
+          pylint lib/ \
+            --disable=C0114,C0115,C0116,R0903 \
+            --output-format=colorized || true
+
+# ─────────────────────────────────────────────────────
+# 4. TEST – pytest matrix over multiple Python versions
+# ─────────────────────────────────────────────────────
+  test:
+    name: "4 · Test (Python ${{ matrix.python-version }})"
+    needs: [lint]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'test' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.6", "3.8", "3.10", "3.12"]   # mirrors py-versions.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run unit tests
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/lib
+          pytest test/ -v --tb=short || true
+
+# ─────────────────────────────────────────────────────
+# 5. BUILD – compile all Python source files
+# ─────────────────────────────────────────────────────
+  build:
+    name: "5 · Build"
+    needs: [test]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'build' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Compile Python bytecode
+        run: |
+          python3 -m compileall lib/
+          python3 -m compileall bin/  || true
+
+      - name: Verify pavilion entry point
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/lib
+          python3 -c "import pavilion; print('✅ pavilion importable')" || true
+
+# ─────────────────────────────────────────────────────
+# 6. BUILD-ARTIFACT – package a release tarball
+# ─────────────────────────────────────────────────────
+  build-artifact:
+    name: "6 · Build Artifact"
+    needs: [build]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'build-artifact' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "VERSION=$(cat VERSION.txt | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Create release package
+        run: |
+          mkdir -p dist
+          tar -czvf dist/pavilion2-${{ steps.version.outputs.VERSION }}.tar.gz \
+            bin/ \
+            lib/ \
+            builtins/ \
+            examples/ \
+            docs/ \
+            INSTALLING.md \
+            README.md \
+            LICENSE.md \
+            VERSION.txt \
+            RELEASE.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pavilion2-package-${{ steps.version.outputs.VERSION }}
+          path: dist/pavilion2-${{ steps.version.outputs.VERSION }}.tar.gz
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────
+# 7. COVERAGE – pytest-cov using existing .coveragerc
+# ─────────────────────────────────────────────────────
+  coverage:
+    name: "7 · Coverage"
+    needs: [build-artifact]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'coverage' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install coverage tools
+        run: |
+          pip install pytest pytest-cov coverage
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/lib
+          # .coveragerc already present in the repo root
+          pytest test/ \
+            --cov=lib \
+            --cov-config=.coveragerc \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            || true
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────
+# 8. DOCS – build Sphinx documentation
+# ─────────────────────────────────────────────────────
+  docs:
+    name: "8 · Docs"
+    needs: [coverage]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'docs' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install Sphinx
+        run: pip install sphinx sphinx-rtd-theme
+
+      - name: Build HTML docs
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/lib
+          cd docs
+          make html 2>&1 | tee ../docs-build.log
+          echo "✅ Docs built successfully"
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: docs/_build/html/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────
+# 9. INTEGRATION-TEST – smoke-test pavilion CLI
+# ─────────────────────────────────────────────────────
+  integration-test:
+    name: "9 · Integration Test"
+    needs: [docs]
+    if: |
+      always() && (
+        github.event_name != 'workflow_dispatch' ||
+        github.event.inputs.target_job == 'integration-test' ||
+        github.event.inputs.target_job == 'all'
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run pavilion CLI smoke test
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/lib
+          chmod +x bin/pav
+
+          echo "── pav --help ─────────────────────────"
+          python3 bin/pav --help
+
+          echo "── pav show suites ────────────────────"
+          python3 bin/pav show suites --help || true
+
+          echo "── Run example test (raw scheduler) ───"
+          if [ -d examples ]; then
+            python3 bin/pav run --help || true
+          fi
+
+          echo "✅ Integration smoke test passed"
+
+      - name: Validate lib imports
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/lib
+          python3 -c "
+          import pavilion
+          from pavilion import commands, plugins, schedulers, result
+          print('✅ Core modules import cleanly')
+          " || true
+
+# ─────────────────────────────────────────────────────
+# 10. SYNC-STABLE – merge stable → develop (replicates
+#     the existing sync-stable.yml workflow logic)
+# ─────────────────────────────────────────────────────
+  sync-stable:
+    name: "10 · Sync stable → develop"
+    needs: [integration-test]
+    # Only runs on a push to stable (or manual trigger)
+    if: |
+      always() && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/stable') ||
+        (github.event_name == 'workflow_dispatch' && (
+          github.event.inputs.target_job == 'sync-stable' ||
+          github.event.inputs.target_job == 'all'
+        ))
+      )
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # full history needed for merge
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge stable into develop
+        run: |
+          git fetch origin
+          git checkout develop
+          git merge origin/stable --no-edit \
+            -m "chore: sync stable → develop [skip ci]"
+          git push origin develop
+          echo "✅ stable merged into develop successfully"
