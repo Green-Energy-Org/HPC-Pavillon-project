@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   open-sync-pr:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     env:
       BASE_BRANCH: ${{ github.event.repository.default_branch }}
