@@ -16,7 +16,7 @@ permissions:
 jobs:
   load-python-version:
     name: Load Python version
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     outputs:
       default_py_version: ${{steps.load-py-version.outputs.default_py_version}}
